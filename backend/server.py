@@ -39,18 +39,7 @@ OUTPUTS_DIR.mkdir(exist_ok=True)
 
 tts_client = None
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global tts_client
-    try:
-        tts_client = texttospeech.TextToSpeechClient()
-        logging.info("TTS client initialized")
-    except Exception as e:
-        logging.warning(f"TTS client initialization failed: {e}")
-    yield
-    logging.info("Shutting down")
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
