@@ -128,6 +128,51 @@ export const Dashboard = () => {
           <div className="mt-8 space-y-6" data-testid="results-section">
             <h2 className="text-2xl font-heading font-semibold text-center">Your Launch Pack is Ready! 🎉</h2>
             
+            {/* Videos Section */}
+            {(results.ad_video || results.tutorial_video) && (
+              <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                  Complete Videos with Voiceover & Captions
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {results.ad_video && (
+                    <div className="bg-zinc-950/50 rounded-lg p-4">
+                      <p className="text-sm text-zinc-400 mb-2">Ad Video (9:16 - TikTok/Reels)</p>
+                      <p className="text-xs text-zinc-500 mb-3">
+                        ✓ Voiceover • ✓ Captions • ✓ Zoom Effects • ✓ Progress Bar
+                      </p>
+                      <a
+                        href={`${BACKEND_URL}${results.ad_video.url}`}
+                        download
+                        data-testid="download-ad-video"
+                        className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-md transition-all"
+                      >
+                        Download Ad Video
+                      </a>
+                    </div>
+                  )}
+                  {results.tutorial_video && (
+                    <div className="bg-zinc-950/50 rounded-lg p-4">
+                      <p className="text-sm text-zinc-400 mb-2">Tutorial Video (16:9 - YouTube)</p>
+                      <p className="text-xs text-zinc-500 mb-3">
+                        ✓ Voiceover • ✓ Captions • ✓ Zoom Effects • ✓ Progress Bar
+                      </p>
+                      <a
+                        href={`${BACKEND_URL}${results.tutorial_video.url}`}
+                        download
+                        data-testid="download-tutorial-video"
+                        className="inline-block bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-md transition-all"
+                      >
+                        Download Tutorial Video
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Scripts Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
                 <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -146,6 +191,7 @@ export const Dashboard = () => {
               </div>
             </div>
             
+            {/* Posters Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {results.posters.map((poster, index) => (
                 <div key={poster.id} className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
