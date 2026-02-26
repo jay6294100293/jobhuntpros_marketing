@@ -571,8 +571,10 @@ async def create_poster(request: PosterRequest):
 @api_router.post("/magic-button")
 async def magic_button(request: MagicButtonRequest):
     try:
+        # Step 1: Scrape URL for brand data
         brand_data = await scrape_url(url=request.url)
         
+        # Step 2: Generate ad script (PAS framework)
         script_req = ScriptRequest(
             framework="PAS",
             product_name=request.product_name,
@@ -581,9 +583,41 @@ async def magic_button(request: MagicButtonRequest):
         )
         ad_script = await generate_script(script_req)
         
+        # Step 3: Generate tutorial script (Step-by-Step)
         script_req.framework = "Step-by-Step"
         tutorial_script = await generate_script(script_req)
         
+        # Step 4: Generate complete ad video with voiceover, captions, etc.
+        try:
+            ad_video_req = CompleteVideoRequest(
+                script=ad_script["content"][:500],  # Limit to ~60 seconds
+                brand_colors=brand_data["colors"],
+                format="9:16",  # TikTok/Reels format
+                add_voiceover=True,
+                add_captions=True,
+                add_progress_bar=True
+            )
+            ad_video = await create_complete_video(ad_video_req)
+        except Exception as e:
+            logger.warning(f"Ad video creation failed: {e}, skipping")
+            ad_video = None
+        
+        # Step 5: Generate complete tutorial video
+        try:
+            tutorial_video_req = CompleteVideoRequest(
+                script=tutorial_script["content"][:500],
+                brand_colors=brand_data["colors"],
+                format="16:9",  # YouTube format
+                add_voiceover=True,
+                add_captions=True,
+                add_progress_bar=True
+            )
+            tutorial_video = await create_complete_video(tutorial_video_req)
+        except Exception as e:
+            logger.warning(f"Tutorial video creation failed: {e}, skipping")
+            tutorial_video = None
+        
+        # Step 6: Generate posters
         poster1_req = PosterRequest(
             headline=request.product_name,
             subtext=brand_data["description"][:50],
@@ -604,10 +638,14 @@ async def magic_button(request: MagicButtonRequest):
             "brand_data": brand_data,
             "ad_script": ad_script,
             "tutorial_script": tutorial_script,
+            "ad_video": ad_video,
+            "tutorial_video": tutorial_video,
             "posters": [poster1, poster2]
         }
     except Exception as e:
         logger.error(f"Magic button error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Magic button failed: {str(e)}")
 
 @api_router.get("/download/{filename}")
