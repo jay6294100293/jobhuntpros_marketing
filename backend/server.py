@@ -20,12 +20,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from google.cloud import texttospeech
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-try:
-    from moviepy.video.compositing.concatenate import concatenate_videoclips
-    from moviepy.video.VideoClip import ImageClip
-    from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-except ImportError:
-    pass
+from moviepy import ImageClip, concatenate_videoclips, CompositeVideoClip
 import numpy as np
 from collections import Counter
 import re
