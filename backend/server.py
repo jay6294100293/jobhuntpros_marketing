@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,67 +7,456 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
+import aiofiles
+import io
+import json
+from contextlib import asynccontextmanager
 
+from bs4 import BeautifulSoup
+import requests
+from PIL import Image, ImageDraw, ImageFont
+from google.cloud import texttospeech
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+from moviepy.editor import ImageClip, concatenate_videoclips, CompositeVideoClip, TextClip, VideoFileClip, AudioFileClip
+import numpy as np
+from collections import Counter
+import re
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+UPLOADS_DIR = ROOT_DIR / 'uploads'
+OUTPUTS_DIR = ROOT_DIR / 'outputs'
+UPLOADS_DIR.mkdir(exist_ok=True)
+OUTPUTS_DIR.mkdir(exist_ok=True)
 
-# Create a router with the /api prefix
+tts_client = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global tts_client
+    try:
+        tts_client = texttospeech.TextToSpeechClient()
+        logging.info("TTS client initialized")
+    except Exception as e:
+        logging.warning(f"TTS client initialization failed: {e}")
+    yield
+    logging.info("Shutting down")
+
+app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+class BrandData(BaseModel):
+    url: str
+    colors: List[str]
+    headline: str
+    features: List[str]
+    description: str
+
+class ScriptRequest(BaseModel):
+    framework: str
+    product_name: str
+    target_audience: str
+    key_features: List[str]
+    brand_context: Optional[str] = None
+
+class VoiceoverRequest(BaseModel):
+    text: str
+    voice_name: str = "en-US-Neural2-A"
+    speaking_rate: float = 1.0
+
+class VideoRequest(BaseModel):
+    project_id: str
+    video_type: str
+    format: str = "16:9"
+
+class PosterRequest(BaseModel):
+    headline: str
+    subtext: str
+    brand_colors: List[str]
+    format: str = "1:1"
+
+class MagicButtonRequest(BaseModel):
+    url: str
+    product_name: str
+    target_audience: str
+
+class Project(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    name: str
+    brand_data: Optional[dict] = None
+    assets: List[dict] = []
+    scripts: List[dict] = []
+    outputs: List[dict] = []
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+def extract_colors_from_image(image_url: str, num_colors: int = 5) -> List[str]:
+    try:
+        response = requests.get(image_url, timeout=10)
+        img = Image.open(io.BytesIO(response.content))
+        img = img.convert('RGB')
+        img = img.resize((150, 150))
+        pixels = list(img.getdata())
+        color_counts = Counter(pixels)
+        dominant_colors = color_counts.most_common(num_colors)
+        hex_colors = [f"#{r:02x}{g:02x}{b:02x}" for (r, g, b), _ in dominant_colors]
+        return hex_colors
+    except:
+        return ["#6366f1", "#8b5cf6", "#10b981"]
 
-# Add your routes to the router instead of directly to app
+@api_router.post("/scrape")
+async def scrape_url(url: str = Form(...)):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        title = soup.find('title')
+        headline = title.string if title else "Your Product"
+        
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        description = meta_desc['content'] if meta_desc else "Amazing product description"
+        
+        features = []
+        for tag in soup.find_all(['h2', 'h3', 'li']):
+            text = tag.get_text().strip()
+            if text and len(text) > 10 and len(text) < 100:
+                features.append(text)
+                if len(features) >= 5:
+                    break
+        
+        colors = ["#6366f1", "#8b5cf6", "#10b981"]
+        try:
+            og_image = soup.find('meta', property='og:image')
+            if og_image and og_image.get('content'):
+                img_url = og_image['content']
+                if not img_url.startswith('http'):
+                    from urllib.parse import urljoin
+                    img_url = urljoin(url, img_url)
+                colors = extract_colors_from_image(img_url)
+        except:
+            pass
+        
+        brand_data = {
+            "url": url,
+            "colors": colors[:3],
+            "headline": headline,
+            "features": features[:5],
+            "description": description[:200]
+        }
+        
+        return brand_data
+    except Exception as e:
+        logger.error(f"Scraping error: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to scrape URL: {str(e)}")
+
+@api_router.post("/upload")
+async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
+    try:
+        file_id = str(uuid.uuid4())
+        file_ext = Path(file.filename).suffix
+        file_path = UPLOADS_DIR / f"{file_id}{file_ext}"
+        
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        return {
+            "id": file_id,
+            "filename": file.filename,
+            "path": str(file_path),
+            "type": file_type,
+            "size": len(content)
+        }
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}")
+
+@api_router.post("/generate-script")
+async def generate_script(request: ScriptRequest):
+    try:
+        emergent_key = os.getenv('EMERGENT_LLM_KEY')
+        if not emergent_key:
+            raise HTTPException(status_code=500, detail="API key not configured")
+        
+        frameworks = {
+            "PAS": f"""Write a compelling 60-second video script for {request.product_name} using the Problem-Agitate-Solution framework:
+            
+            Target Audience: {request.target_audience}
+            Key Features: {', '.join(request.key_features)}
+            
+            Structure:
+            1. Problem (15s): Identify the main pain point
+            2. Agitate (20s): Emphasize the frustration and consequences
+            3. Solution (25s): Present {request.product_name} as the perfect solution with specific features
+            
+            Keep it conversational, authentic, and action-oriented. End with a clear CTA.""",
+            
+            "Step-by-Step": f"""Write a clear tutorial script for {request.product_name} with step-by-step instructions:
+            
+            Target Audience: {request.target_audience}
+            Key Features: {', '.join(request.key_features)}
+            
+            Structure:
+            1. Introduction (10s): What they'll learn
+            2. Step 1-3 (40s): Clear, actionable steps with specific feature mentions
+            3. Conclusion (10s): Benefits and encouragement
+            
+            Use simple language, be encouraging, and focus on value.""",
+            
+            "Before/After": f"""Write a transformative Before/After video script for {request.product_name}:
+            
+            Target Audience: {request.target_audience}
+            Key Features: {', '.join(request.key_features)}
+            
+            Structure:
+            1. Before (20s): Paint the struggle without the product
+            2. Discovery (10s): Finding {request.product_name}
+            3. After (30s): Show the transformation with specific feature benefits
+            
+            Make it emotional, relatable, and aspirational. Include social proof if possible."""
+        }
+        
+        prompt = frameworks.get(request.framework, frameworks["PAS"])
+        
+        chat = LlmChat(
+            api_key=emergent_key,
+            session_id=str(uuid.uuid4()),
+            system_message="You are an expert marketing copywriter specializing in video scripts."
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        script_data = {
+            "id": str(uuid.uuid4()),
+            "framework": request.framework,
+            "content": response,
+            "product_name": request.product_name,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        return script_data
+    except Exception as e:
+        logger.error(f"Script generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Script generation failed: {str(e)}")
+
+@api_router.post("/generate-voiceover")
+async def generate_voiceover(request: VoiceoverRequest):
+    try:
+        if not tts_client:
+            raise HTTPException(status_code=500, detail="TTS service not available")
+        
+        synthesis_input = texttospeech.SynthesisInput(text=request.text)
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US",
+            name=request.voice_name,
+            ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=request.speaking_rate
+        )
+        
+        response = tts_client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        
+        audio_id = str(uuid.uuid4())
+        audio_path = OUTPUTS_DIR / f"{audio_id}.mp3"
+        
+        async with aiofiles.open(audio_path, 'wb') as f:
+            await f.write(response.audio_content)
+        
+        return {
+            "id": audio_id,
+            "path": str(audio_path),
+            "url": f"/api/download/{audio_id}.mp3"
+        }
+    except Exception as e:
+        logger.error(f"Voiceover generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Voiceover generation failed: {str(e)}")
+
+@api_router.post("/create-video")
+async def create_video(background_tasks: BackgroundTasks, video_type: str = Form(...), format_type: str = Form("16:9"), script_text: str = Form(...), image_paths: str = Form("[]")):
+    try:
+        video_id = str(uuid.uuid4())
+        
+        if format_type == "16:9":
+            width, height = 1920, 1080
+        elif format_type == "9:16":
+            width, height = 1080, 1920
+        else:
+            width, height = 1080, 1080
+        
+        image_list = json.loads(image_paths) if image_paths != "[]" else []
+        
+        if not image_list:
+            clips = []
+            colors = [(99, 102, 241), (139, 92, 246), (16, 185, 129)]
+            for i, color in enumerate(colors):
+                img_array = np.full((height, width, 3), color, dtype=np.uint8)
+                clip = ImageClip(img_array).set_duration(2)
+                clips.append(clip)
+            
+            video = concatenate_videoclips(clips, method="compose")
+        else:
+            clips = []
+            for img_path in image_list[:5]:
+                if Path(img_path).exists():
+                    img = Image.open(img_path)
+                    img = img.resize((width, height))
+                    img_array = np.array(img)
+                    clip = ImageClip(img_array).set_duration(3)
+                    clips.append(clip)
+            
+            if clips:
+                video = concatenate_videoclips(clips, method="compose")
+            else:
+                img_array = np.full((height, width, 3), (99, 102, 241), dtype=np.uint8)
+                video = ImageClip(img_array).set_duration(5)
+        
+        output_path = OUTPUTS_DIR / f"{video_id}.mp4"
+        video.write_videofile(str(output_path), fps=24, codec='libx264', audio=False, logger=None)
+        
+        return {
+            "id": video_id,
+            "path": str(output_path),
+            "url": f"/api/download/{video_id}.mp4",
+            "format": format_type
+        }
+    except Exception as e:
+        logger.error(f"Video creation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Video creation failed: {str(e)}")
+
+@api_router.post("/create-poster")
+async def create_poster(request: PosterRequest):
+    try:
+        if request.format == "1:1":
+            width, height = 1080, 1080
+        else:
+            width, height = 1080, 1920
+        
+        img = Image.new('RGB', (width, height), color=request.brand_colors[0] if request.brand_colors else "#6366f1")
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80)
+            subtitle_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40)
+        except:
+            title_font = ImageFont.load_default()
+            subtitle_font = ImageFont.load_default()
+        
+        text_color = "#ffffff"
+        
+        bbox = draw.textbbox((0, 0), request.headline, font=title_font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        text_x = (width - text_width) // 2
+        text_y = height // 3
+        
+        draw.text((text_x, text_y), request.headline, fill=text_color, font=title_font)
+        
+        if request.subtext:
+            bbox2 = draw.textbbox((0, 0), request.subtext, font=subtitle_font)
+            sub_width = bbox2[2] - bbox2[0]
+            sub_x = (width - sub_width) // 2
+            sub_y = text_y + text_height + 50
+            draw.text((sub_x, sub_y), request.subtext, fill=text_color, font=subtitle_font)
+        
+        poster_id = str(uuid.uuid4())
+        poster_path = OUTPUTS_DIR / f"{poster_id}.png"
+        img.save(poster_path)
+        
+        return {
+            "id": poster_id,
+            "path": str(poster_path),
+            "url": f"/api/download/{poster_id}.png",
+            "format": request.format
+        }
+    except Exception as e:
+        logger.error(f"Poster creation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Poster creation failed: {str(e)}")
+
+@api_router.post("/magic-button")
+async def magic_button(request: MagicButtonRequest):
+    try:
+        brand_data = await scrape_url(url=request.url)
+        
+        script_req = ScriptRequest(
+            framework="PAS",
+            product_name=request.product_name,
+            target_audience=request.target_audience,
+            key_features=brand_data["features"][:3]
+        )
+        ad_script = await generate_script(script_req)
+        
+        script_req.framework = "Step-by-Step"
+        tutorial_script = await generate_script(script_req)
+        
+        poster1_req = PosterRequest(
+            headline=request.product_name,
+            subtext=brand_data["description"][:50],
+            brand_colors=brand_data["colors"],
+            format="1:1"
+        )
+        poster1 = await create_poster(poster1_req)
+        
+        poster2_req = PosterRequest(
+            headline=request.product_name,
+            subtext="Transform Your Workflow",
+            brand_colors=brand_data["colors"],
+            format="9:16"
+        )
+        poster2 = await create_poster(poster2_req)
+        
+        return {
+            "brand_data": brand_data,
+            "ad_script": ad_script,
+            "tutorial_script": tutorial_script,
+            "posters": [poster1, poster2]
+        }
+    except Exception as e:
+        logger.error(f"Magic button error: {e}")
+        raise HTTPException(status_code=500, detail=f"Magic button failed: {str(e)}")
+
+@api_router.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = OUTPUTS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
+
+@api_router.get("/projects")
+async def get_projects():
+    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
+    return projects
+
+@api_router.post("/projects")
+async def create_project(name: str = Form(...)):
+    project = Project(name=name)
+    doc = project.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.projects.insert_one(doc)
+    return project
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "JobHuntPro Content Studio API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -76,13 +466,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
