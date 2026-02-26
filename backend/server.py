@@ -244,8 +244,13 @@ async def generate_script(request: ScriptRequest):
 @api_router.post("/generate-voiceover")
 async def generate_voiceover(request: VoiceoverRequest):
     try:
+        global tts_client
         if not tts_client:
-            raise HTTPException(status_code=500, detail="TTS service not available")
+            try:
+                tts_client = texttospeech.TextToSpeechClient()
+            except Exception as e:
+                logging.warning(f"TTS initialization failed: {e}")
+                raise HTTPException(status_code=500, detail="TTS service not available - Google Cloud credentials may be missing")
         
         synthesis_input = texttospeech.SynthesisInput(text=request.text)
         voice = texttospeech.VoiceSelectionParams(
