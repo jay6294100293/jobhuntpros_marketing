@@ -1,0 +1,156 @@
+{
+  "identity": {
+    "app_name": "JobHuntPro Content Studio",
+    "theme_mode": "dark",
+    "design_personality": "Cybernetic Studio",
+    "emotional_tone": "Effortless Power, Professional Polish, Creative Magic"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Outfit, sans-serif",
+      "body": "DM Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "installation_command": "yarn add @fontsource/outfit @fontsource/dm-sans @fontsource/jetbrains-mono",
+    "scale": {
+      "h1": "text-5xl md:text-6xl font-bold tracking-tight leading-none",
+      "h2": "text-4xl md:text-5xl font-semibold tracking-tight",
+      "h3": "text-2xl md:text-3xl font-medium tracking-tight",
+      "body_lg": "text-lg leading-relaxed text-zinc-300",
+      "body_base": "text-base leading-relaxed text-zinc-400",
+      "caption": "text-sm font-medium tracking-wide text-zinc-500 uppercase",
+      "mono_sm": "font-mono text-xs text-zinc-500"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": "#09090b",
+      "surface": "#18181b",
+      "surface_highlight": "#27272a",
+      "border": "#27272a",
+      "primary": "#6366f1",
+      "primary_gradient_start": "#6366f1",
+      "primary_gradient_end": "#8b5cf6",
+      "secondary": "#10b981",
+      "destructive": "#ef4444",
+      "text_primary": "#fafafa",
+      "text_secondary": "#a1a1aa",
+      "text_tertiary": "#52525b"
+    },
+    "utility_classes": {
+      "bg_app": "bg-zinc-950",
+      "bg_surface": "bg-zinc-900/50 backdrop-blur-xl border border-white/5",
+      "bg_card": "bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors",
+      "text_gradient": "bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400",
+      "border_subtle": "border-zinc-800",
+      "border_highlight": "border-indigo-500/50"
+    }
+  },
+  "layout_strategy": {
+    "container_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "spacing_scale": {
+      "section_gap": "gap-12 md:gap-24",
+      "component_gap": "gap-6",
+      "internal_padding": "p-6 md:p-8"
+    },
+    "grid_systems": {
+      "dashboard_bento": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "editor_layout": "grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-4rem)]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-md shadow-lg shadow-indigo-500/20 transition-all active:scale-95",
+      "secondary": "bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium px-6 py-3 rounded-md border border-zinc-700 transition-all",
+      "magic": "bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 text-white font-bold px-8 py-4 rounded-lg shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all hover:scale-105 active:scale-95 flex items-center gap-2",
+      "ghost": "text-zinc-400 hover:text-white hover:bg-zinc-800/50 px-4 py-2 rounded-md transition-colors"
+    },
+    "cards": {
+      "default": "bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6 hover:border-zinc-700 transition-colors",
+      "interactive": "group relative overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl p-6 hover:border-indigo-500/30 transition-all cursor-pointer hover:shadow-2xl hover:shadow-indigo-500/10",
+      "glass": "bg-zinc-950/70 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl"
+    },
+    "inputs": {
+      "default": "bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600",
+      "minimal": "bg-transparent border-b border-zinc-800 rounded-none px-0 py-2 text-zinc-100 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-zinc-600"
+    }
+  },
+  "visual_enhancers": {
+    "gradients": {
+      "hero_glow": "absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-indigo-600/20 blur-[100px] rounded-full pointer-events-none",
+      "card_hover": "absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+    },
+    "textures": {
+      "noise": "absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"
+    },
+    "shadows": {
+      "glow": "shadow-[0_0_40px_-10px_rgba(99,102,241,0.3)]",
+      "neon": "drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+    }
+  },
+  "image_assets": {
+    "placeholders": [
+      {
+        "category": "tutorial_thumbnail",
+        "url": "https://images.unsplash.com/photo-1770048532712-4fde5ef7eb90?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Tutorial Thumbnail - Man working on laptop"
+      },
+      {
+        "category": "ad_thumbnail",
+        "url": "https://images.pexels.com/photos/1181433/pexels-photo-1181433.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Ad Thumbnail - Team Collaboration"
+      },
+      {
+        "category": "social_poster_bg",
+        "url": "https://images.pexels.com/photos/7643888/pexels-photo-7643888.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Poster Background - Virtual Meeting"
+      },
+      {
+        "category": "avatar",
+        "url": "https://images.unsplash.com/photo-1762341121611-1d6faa70fb2b?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "User Avatar"
+      }
+    ]
+  },
+  "motion": {
+    "libraries": ["framer-motion"],
+    "preferences": {
+      "reduced_motion": "user-preference",
+      "transition_default": "transition-all duration-300 ease-out"
+    },
+    "animation_presets": {
+      "fade_in_up": {
+        "initial": { "opacity": 0, "y": 20 },
+        "animate": { "opacity": 1, "y": 0 },
+        "transition": { "duration": 0.5, "ease": "easeOut" }
+      },
+      "stagger_children": {
+        "visible": { "transition": { "staggerChildren": 0.1 } }
+      }
+    }
+  },
+  "accessibility": {
+    "contrast_check": "Ensure text-primary on surface meets WCAG AA (4.5:1). Use 'text-zinc-50' on 'bg-zinc-900'.",
+    "focus_states": "All interactive elements MUST have visible focus ring: 'focus:ring-2 focus:ring-indigo-500'",
+    "aria_labels": "Required for icon-only buttons."
+  },
+  "universal_guidelines": [
+    "Do NOT use 'Inter' font. Use 'Outfit' for headings and 'DM Sans' for body.",
+    "Do NOT use pure black (#000000). Use Zinc-950 (#09090b) for backgrounds.",
+    "Do NOT use gradient text for body content. Only for short, high-impact headings.",
+    "Always add 'backdrop-blur-xl' to floating panels/modals.",
+    "Use 'gap-6' or 'gap-8' for breathing room. Avoid cramped layouts.",
+    "Interactive elements must have a defined hover state (color change or scale).",
+    "All buttons must have 'active:scale-95' for tactile feedback.",
+    "Use 'sonner' for all toast notifications."
+  ],
+  "instructions_to_main_agent": [
+    "Install required fonts using the installation_command in typography section.",
+    "Update tailwind.config.js to extend the theme with the provided color palette (zinc based).",
+    "Create a 'Layout' component that wraps the app with the dark theme background and noise texture.",
+    "Use 'lucide-react' for icons.",
+    "For the 'Magic Button', use the 'components.buttons.magic' classes.",
+    "For the Dashboard, use the 'dashboard_bento' grid system.",
+    "Refer to 'visual_enhancers' for adding polish (glows, shadows) to the Editor interface."
+  ]
+}
