@@ -219,6 +219,7 @@ class JobHuntProAPITester:
             "create-video",
             200,
             data=data,
+            files={},  # Force form data handling
             timeout=60  # Video creation takes time
         )
         
