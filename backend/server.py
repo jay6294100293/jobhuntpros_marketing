@@ -175,9 +175,9 @@ async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
 @api_router.post("/generate-script")
 async def generate_script(request: ScriptRequest):
     try:
-        emergent_key = os.getenv('EMERGENT_LLM_KEY')
-        if not emergent_key:
-            raise HTTPException(status_code=500, detail="API key not configured")
+        gemini_key = os.getenv('GEMINI_API_KEY')
+        if not gemini_key or gemini_key == 'your-gemini-api-key-here':
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured. Please add your free API key from https://aistudio.google.com/apikey to backend/.env")
         
         frameworks = {
             "PAS": f"""Write a compelling 60-second video script for {request.product_name} using the Problem-Agitate-Solution framework:
@@ -220,10 +220,10 @@ async def generate_script(request: ScriptRequest):
         prompt = frameworks.get(request.framework, frameworks["PAS"])
         
         chat = LlmChat(
-            api_key=emergent_key,
+            api_key=gemini_key,
             session_id=str(uuid.uuid4()),
             system_message="You are an expert marketing copywriter specializing in video scripts."
-        ).with_model("openai", "gpt-4o")
+        ).with_model("gemini", "gemini-2.5-flash")
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
@@ -237,6 +237,8 @@ async def generate_script(request: ScriptRequest):
         }
         
         return script_data
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Script generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Script generation failed: {str(e)}")
