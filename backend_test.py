@@ -33,8 +33,9 @@ class JobHuntProAPITester:
                 response = requests.get(url, headers=headers, timeout=timeout)
             elif method == 'POST':
                 if files:
-                    # For file uploads, don't set Content-Type header
-                    del headers['Content-Type']
+                    # For file uploads or form data, don't set Content-Type header  
+                    if 'Content-Type' in headers:
+                        del headers['Content-Type']
                     response = requests.post(url, data=data, files=files, headers=headers, timeout=timeout)
                 elif isinstance(data, dict) and not files:
                     response = requests.post(url, json=data, headers=headers, timeout=timeout)
