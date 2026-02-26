@@ -289,10 +289,16 @@ async def generate_voiceover(request: VoiceoverRequest):
         async with aiofiles.open(audio_path, 'wb') as f:
             await f.write(response.audio_content)
         
+        # Track usage for free tier monitoring
+        char_count = len(request.text)
+        logging.info(f"TTS generated: {char_count} characters. Monthly limit: 4M Standard, 1M Neural2")
+        
         return {
             "id": audio_id,
             "path": str(audio_path),
-            "url": f"/api/download/{audio_id}.mp3"
+            "url": f"/api/download/{audio_id}.mp3",
+            "characters_used": char_count,
+            "estimated_cost": "$0.00 (within free tier)" if char_count < 4000000 else f"${char_count * 0.000004:.4f}"
         }
     except Exception as e:
         logger.error(f"Voiceover generation error: {e}")
