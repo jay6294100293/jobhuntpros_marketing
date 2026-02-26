@@ -236,7 +236,7 @@ class JobHuntProAPITester:
     def test_magic_button(self):
         """Test the magic button functionality - the key feature"""
         magic_request = {
-            "url": "https://example.com",
+            "url": "https://www.github.com",  # Use a more reliable URL
             "product_name": "JobHuntPro",
             "target_audience": "Job seekers"
         }
