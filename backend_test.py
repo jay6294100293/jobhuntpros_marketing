@@ -81,12 +81,14 @@ class JobHuntProAPITester:
     def test_url_scraping(self):
         """Test URL scraping functionality"""
         test_url = "https://example.com"
+        # This endpoint expects form data, not JSON
         success, response = self.run_test(
             "URL Scraping",
-            "POST",
+            "POST", 
             "scrape",
             200,
-            data={"url": test_url}
+            data={"url": test_url},
+            files={}  # Force form data handling
         )
         
         if success and response:
