@@ -20,7 +20,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from google.cloud import texttospeech
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from moviepy import ImageClip, concatenate_videoclips, CompositeVideoClip
+from moviepy import ImageClip, concatenate_videoclips, CompositeVideoClip, TextClip, AudioFileClip
 import numpy as np
 from collections import Counter
 import re
