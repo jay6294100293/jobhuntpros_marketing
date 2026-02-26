@@ -249,10 +249,22 @@ async def generate_voiceover(request: VoiceoverRequest):
         global tts_client
         if not tts_client:
             try:
+                credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+                if not credentials_path or not Path(credentials_path).exists():
+                    raise HTTPException(
+                        status_code=503, 
+                        detail="Google Cloud TTS not configured. Add credentials to enable voiceovers. See /app/TTS_SETUP.md for instructions."
+                    )
                 tts_client = texttospeech.TextToSpeechClient()
+                logging.info("TTS client initialized successfully")
+            except HTTPException:
+                raise
             except Exception as e:
                 logging.warning(f"TTS initialization failed: {e}")
-                raise HTTPException(status_code=500, detail="TTS service not available - Google Cloud credentials may be missing")
+                raise HTTPException(
+                    status_code=503, 
+                    detail=f"TTS service initialization failed. Check credentials. Error: {str(e)}"
+                )
         
         synthesis_input = texttospeech.SynthesisInput(text=request.text)
         voice = texttospeech.VoiceSelectionParams(
