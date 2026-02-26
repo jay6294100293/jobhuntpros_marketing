@@ -295,13 +295,14 @@ class JobHuntProAPITester:
             200
         )
         
-        # Create project
+        # Create project - this endpoint expects form data
         success2, response = self.run_test(
             "Create Project",
             "POST",
             "projects",
             200,
-            data={"name": f"Test Project {datetime.now().strftime('%H%M%S')}"}
+            data={"name": f"Test Project {datetime.now().strftime('%H%M%S')}"},
+            files={}  # Force form data handling
         )
         
         return success1 and success2
