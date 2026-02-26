@@ -313,6 +313,160 @@ async def generate_voiceover(request: VoiceoverRequest):
         logger.error(f"Voiceover generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Voiceover generation failed: {str(e)}")
 
+@api_router.post("/create-complete-video")
+async def create_complete_video(request: CompleteVideoRequest):
+    """Create a complete professional video with voiceover, captions, zoom/pan, and progress bars"""
+    try:
+        video_id = str(uuid.uuid4())
+        
+        # Determine dimensions
+        if request.format == "16:9":
+            width, height = 1920, 1080
+        elif request.format == "9:16":
+            width, height = 1080, 1920
+        else:
+            width, height = 1080, 1080
+        
+        # Split script into sentences for caption timing
+        sentences = re.split(r'[.!?]+', request.script)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        # Calculate timing: ~3 seconds per sentence
+        duration_per_clip = 3
+        total_duration = len(sentences) * duration_per_clip
+        
+        # Generate voiceover if requested
+        audio_path = None
+        if request.add_voiceover:
+            try:
+                voiceover_req = VoiceoverRequest(
+                    text=request.script,
+                    voice_name="en-US-Neural2-A",
+                    speaking_rate=1.0
+                )
+                voiceover_result = await generate_voiceover(voiceover_req)
+                audio_path = voiceover_result["path"]
+            except Exception as e:
+                logging.warning(f"Voiceover generation failed, continuing without audio: {e}")
+        
+        # Create video clips
+        clips = []
+        
+        for i, sentence in enumerate(sentences):
+            # Use provided images or create gradient backgrounds
+            if request.images and i < len(request.images) and Path(request.images[i]).exists():
+                img = Image.open(request.images[i])
+                img = img.resize((width, height))
+            else:
+                # Create gradient background
+                img = Image.new('RGB', (width, height), request.brand_colors[0] if request.brand_colors else "#6366f1")
+                draw = ImageDraw.Draw(img)
+                # Add subtle gradient effect
+                for y in range(height):
+                    alpha = y / height
+                    color = request.brand_colors[1] if len(request.brand_colors) > 1 else "#8b5cf6"
+                    draw.line([(0, y), (width, y)], fill=color, width=1)
+            
+            img_array = np.array(img)
+            
+            # Create base clip with zoom effect (starts at 100%, zooms to 110%)
+            clip = ImageClip(img_array).set_duration(duration_per_clip)
+            
+            # Add zoom/pan effect
+            def zoom_effect(t):
+                zoom = 1.0 + (0.1 * t / duration_per_clip)  # Zoom from 1.0 to 1.1
+                return zoom
+            
+            clip = clip.resize(lambda t: zoom_effect(t))
+            clip = clip.set_position(('center', 'center'))
+            
+            # Add captions if requested
+            if request.add_captions and sentence:
+                # Clean sentence
+                caption_text = sentence[:80]  # Limit length
+                
+                # Create text clip with UGC-style appearance
+                try:
+                    # Position caption at bottom third
+                    txt_clip = TextClip(
+                        caption_text,
+                        fontsize=min(60, width // 15),
+                        color='white',
+                        font='Arial-Bold',
+                        stroke_color='black',
+                        stroke_width=2,
+                        method='caption',
+                        size=(int(width * 0.9), None)
+                    ).set_duration(duration_per_clip).set_position(('center', int(height * 0.75)))
+                    
+                    # Add fade in/out
+                    txt_clip = txt_clip.crossfadein(0.3).crossfadeout(0.3)
+                    
+                    # Composite text over video
+                    clip = CompositeVideoClip([clip, txt_clip])
+                except Exception as e:
+                    logging.warning(f"Text overlay failed: {e}, continuing without captions")
+            
+            # Add progress bar if requested
+            if request.add_progress_bar:
+                progress = (i + 1) / len(sentences)
+                # Create progress bar as image
+                pb_img = Image.new('RGBA', (width, 10), (0, 0, 0, 0))
+                pb_draw = ImageDraw.Draw(pb_img)
+                pb_draw.rectangle([0, 0, int(width * progress), 10], fill=request.brand_colors[0] if request.brand_colors else "#6366f1")
+                pb_array = np.array(pb_img)
+                
+                pb_clip = ImageClip(pb_array).set_duration(duration_per_clip).set_position(('center', height - 20))
+                clip = CompositeVideoClip([clip, pb_clip])
+            
+            clips.append(clip)
+        
+        # Concatenate all clips
+        if clips:
+            final_video = concatenate_videoclips(clips, method="compose")
+        else:
+            # Fallback to simple video
+            img_array = np.full((height, width, 3), (99, 102, 241), dtype=np.uint8)
+            final_video = ImageClip(img_array).set_duration(5)
+        
+        # Add audio if available
+        if audio_path and Path(audio_path).exists():
+            try:
+                audio_clip = AudioFileClip(audio_path)
+                # Trim or extend video to match audio
+                if audio_clip.duration > final_video.duration:
+                    final_video = final_video.loop(duration=audio_clip.duration)
+                final_video = final_video.set_audio(audio_clip)
+            except Exception as e:
+                logging.warning(f"Audio attachment failed: {e}, continuing without audio")
+        
+        # Export video
+        output_path = OUTPUTS_DIR / f"{video_id}.mp4"
+        final_video.write_videofile(
+            str(output_path),
+            fps=24,
+            codec='libx264',
+            audio_codec='aac' if audio_path else None,
+            logger=None,
+            preset='ultrafast'
+        )
+        
+        return {
+            "id": video_id,
+            "path": str(output_path),
+            "url": f"/api/download/{video_id}.mp4",
+            "format": request.format,
+            "duration": final_video.duration,
+            "has_audio": audio_path is not None,
+            "has_captions": request.add_captions,
+            "clips_created": len(clips)
+        }
+    except Exception as e:
+        logger.error(f"Complete video creation error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Video creation failed: {str(e)}")
+
 @api_router.post("/create-video")
 async def create_video(background_tasks: BackgroundTasks, video_type: str = Form(...), format_type: str = Form("16:9"), script_text: str = Form(...), image_paths: str = Form("[]")):
     try:
