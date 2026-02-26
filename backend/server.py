@@ -69,6 +69,15 @@ class VideoRequest(BaseModel):
     video_type: str
     format: str = "16:9"
 
+class CompleteVideoRequest(BaseModel):
+    script: str
+    images: List[str] = []
+    brand_colors: List[str] = ["#6366f1", "#8b5cf6"]
+    format: str = "16:9"
+    add_voiceover: bool = True
+    add_captions: bool = True
+    add_progress_bar: bool = True
+
 class PosterRequest(BaseModel):
     headline: str
     subtext: str
