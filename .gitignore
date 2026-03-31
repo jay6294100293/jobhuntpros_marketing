@@ -77,4 +77,14 @@ agenthub/agents/youtube/db
 .cache/
 
 # Mobile development
-android-sdk/ 
+android-sdk/
+
+# Backend generated outputs (videos, images, audio)
+backend/outputs/
+backend/uploads/
+
+# Frontend build artifacts and lock files
+frontend/build/
+frontend/yarn.lock
+frontend/package-lock.json
+yarn.lock
