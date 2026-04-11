@@ -31,7 +31,9 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
-
+.env
+.env.*
+!.env.example
 *token.json*
 *credentials.json*
 
@@ -88,3 +90,4 @@ frontend/build/
 frontend/yarn.lock
 frontend/package-lock.json
 yarn.lock
+.gitnexus

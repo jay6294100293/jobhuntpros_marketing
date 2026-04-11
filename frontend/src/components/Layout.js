@@ -35,8 +35,8 @@ export const Layout = ({ children }) => {
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-heading font-bold text-gradient" data-testid="app-title">JobHuntPro Studio</h1>
-                <p className="text-xs text-zinc-500 font-mono">Content Creation Suite</p>
+                <h1 className="text-xl font-heading font-bold text-gradient" data-testid="app-title">SwiftPack AI</h1>
+                <p className="text-xs text-zinc-500 font-mono">Launch Pack Generator</p>
               </div>
             </div>
 

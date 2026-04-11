@@ -39,7 +39,13 @@ export const AssetUpload = () => {
     }
   };
   
-  const removeFile = (fileId) => {
+  const removeFile = async (fileId) => {
+    try {
+      await axios.delete(`${API}/upload/${fileId}`);
+    } catch (error) {
+      // File may already be gone or endpoint unavailable; remove from UI anyway
+      console.error('Delete upload error:', error);
+    }
     setFiles(files.filter(f => f.id !== fileId));
   };
   

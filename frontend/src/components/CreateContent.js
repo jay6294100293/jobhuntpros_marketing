@@ -12,6 +12,7 @@ export const CreateContent = () => {
   const [headline, setHeadline] = useState('');
   const [subtext, setSubtext] = useState('');
   const [colors, setColors] = useState(['#6366f1', '#8b5cf6', '#10b981']);
+  const [scriptText, setScriptText] = useState('');
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState(null);
   
@@ -52,7 +53,7 @@ export const CreateContent = () => {
       const formData = new FormData();
       formData.append('video_type', 'tutorial');
       formData.append('format_type', format);
-      formData.append('script_text', headline || 'Sample video');
+      formData.append('script_text', scriptText || headline || 'Sample video');
       formData.append('image_paths', '[]');
       
       const response = await axios.post(`${API}/create-video`, formData);
@@ -154,7 +155,7 @@ export const CreateContent = () => {
                       className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">Subtext</label>
                     <input
@@ -166,7 +167,43 @@ export const CreateContent = () => {
                       className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">Brand Colors</label>
+                    <div className="flex gap-3">
+                      {colors.map((color, i) => (
+                        <div key={i} className="flex flex-col items-center gap-1">
+                          <input
+                            type="color"
+                            value={color}
+                            onChange={(e) => {
+                              const next = [...colors];
+                              next[i] = e.target.value;
+                              setColors(next);
+                            }}
+                            data-testid={`color-picker-${i}`}
+                            className="w-10 h-10 rounded cursor-pointer border border-zinc-700 bg-transparent"
+                          />
+                          <span className="text-xs text-zinc-500">{i === 0 ? 'Primary' : i === 1 ? 'Secondary' : 'Accent'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </>
+              )}
+
+              {contentType === 'video' && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">Script / Text</label>
+                  <textarea
+                    value={scriptText}
+                    onChange={(e) => setScriptText(e.target.value)}
+                    placeholder="Enter the script or text for your video..."
+                    data-testid="script-text-input"
+                    rows={4}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600 resize-none"
+                  />
+                </div>
               )}
               
               <button

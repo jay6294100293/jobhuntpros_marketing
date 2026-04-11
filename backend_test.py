@@ -6,7 +6,7 @@ import io
 import os
 from pathlib import Path
 
-class JobHuntProAPITester:
+class SwiftPackAPITester:
     def __init__(self, base_url="https://ugc-creator-13.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
@@ -141,7 +141,7 @@ class JobHuntProAPITester:
         """Test AI script generation with GPT-4o"""
         script_request = {
             "framework": "PAS",
-            "product_name": "JobHuntPro",
+            "product_name": "SwiftPack AI",
             "target_audience": "Job seekers",
             "key_features": ["Resume builder", "Job tracking", "Interview prep"]
         }
@@ -172,7 +172,7 @@ class JobHuntProAPITester:
     def test_poster_creation(self):
         """Test poster creation functionality"""
         poster_request = {
-            "headline": "JobHuntPro",
+            "headline": "SwiftPack AI",
             "subtext": "Land Your Dream Job",
             "brand_colors": ["#6366f1", "#8b5cf6", "#10b981"],
             "format": "1:1"
@@ -210,7 +210,7 @@ class JobHuntProAPITester:
         data = {
             'video_type': 'tutorial',
             'format_type': '16:9',
-            'script_text': 'This is a test video script for JobHuntPro',
+            'script_text': 'This is a test video script for SwiftPack AI',
             'image_paths': '[]'
         }
         
@@ -237,7 +237,7 @@ class JobHuntProAPITester:
         """Test the magic button functionality - the key feature"""
         magic_request = {
             "url": "https://www.github.com",  # Use a more reliable URL
-            "product_name": "JobHuntPro",
+            "product_name": "SwiftPack AI",
             "target_audience": "Job seekers"
         }
         
@@ -268,7 +268,7 @@ class JobHuntProAPITester:
     def test_voiceover_generation(self):
         """Test TTS voiceover generation (may fail gracefully if no credentials)"""
         voiceover_request = {
-            "text": "This is a test voiceover for JobHuntPro",
+            "text": "This is a test voiceover for SwiftPack AI",
             "voice_name": "en-US-Neural2-A",
             "speaking_rate": 1.0
         }
@@ -309,10 +309,10 @@ class JobHuntProAPITester:
         return success1 and success2
 
 def main():
-    print("🚀 Starting JobHuntPro Content Studio API Tests")
+    print("🚀 Starting SwiftPack AI API Tests")
     print("=" * 60)
     
-    tester = JobHuntProAPITester()
+    tester = SwiftPackAPITester()
     
     # Test basic functionality first
     print("\n📡 Testing Basic Endpoints...")

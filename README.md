@@ -1,4 +1,4 @@
-# JobHuntPro Content Studio
+# SwiftPack AI
 
 > Transform any website URL into a complete marketing launch pack in 30 seconds — videos, scripts, and posters, all AI-powered and completely free to run.
 

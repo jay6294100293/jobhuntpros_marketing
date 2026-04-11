@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FolderOpen, Download, Calendar } from 'lucide-react';
+import { FolderOpen, Download, Calendar, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -8,20 +9,47 @@ const API = `${BACKEND_URL}/api`;
 export const Gallery = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     loadProjects();
   }, []);
-  
+
   const loadProjects = async () => {
     try {
       const response = await axios.get(`${API}/projects`);
       setProjects(response.data);
     } catch (error) {
       console.error('Failed to load projects:', error);
+      toast.error('Failed to load projects');
     } finally {
       setLoading(false);
     }
+  };
+
+  const deleteProject = async (projectId) => {
+    try {
+      await axios.delete(`${API}/projects/${projectId}`);
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+      toast.success('Project deleted');
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      toast.error('Failed to delete project');
+    }
+  };
+
+  const downloadProject = (project) => {
+    const outputs = project.outputs || [];
+    if (outputs.length === 0) {
+      toast.info('No downloadable files for this project');
+      return;
+    }
+    // Download all output files
+    outputs.forEach((url, i) => {
+      const a = document.createElement('a');
+      a.href = url.startsWith('http') ? url : `${BACKEND_URL}${url}`;
+      a.download = `${project.name}-${i + 1}`;
+      a.click();
+    });
   };
   
   return (
@@ -47,9 +75,21 @@ export const Gallery = () => {
             <div key={project.id} className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6 hover:border-zinc-700 transition-all" data-testid={`project-${project.id}`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">{project.name}</h3>
-                <button className="text-zinc-400 hover:text-indigo-400 transition-colors">
-                  <Download className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => downloadProject(project)}
+                    className="text-zinc-400 hover:text-indigo-400 transition-colors"
+                    title="Download project files"
+                  >
+                    <Download className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => deleteProject(project.id)}
+                    className="text-zinc-400 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
               
               <div className="flex items-center gap-2 text-sm text-zinc-500">

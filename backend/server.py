@@ -2,8 +2,8 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="google.generativeai")
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request
-from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request, Response
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,22 +14,26 @@ import os
 import sys
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 import aiofiles
+import httpx
 import io
 import json
 import tempfile
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode
+import secrets
 
 from bs4 import BeautifulSoup
 import requests
 from PIL import Image, ImageDraw, ImageFont
-from collections import Counter
+from collections import Counter, defaultdict
 import re
+import ipaddress
+import time
 import google.generativeai as genai
 import subprocess
 import asyncio
@@ -75,6 +79,10 @@ STRIPE_PRO_PRICE_ID = os.getenv('STRIPE_PRO_PRICE_ID', '')
 if STRIPE_SECRET_KEY and stripe_lib:
     stripe_lib.api_key = STRIPE_SECRET_KEY
 
+BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
+BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@swiftpackai.tech')
+BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'SwiftPack AI')
+
 FREE_TIER_LIMITS = {"scripts": 10, "videos": 5, "posters": 10}
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
@@ -95,6 +103,10 @@ if _gemini_ready:
     gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 else:
     gemini_model = None  # will trigger fallbacks / clear errors
+
+# ── OpenRouter (Gemini fallback) ───────────────────────────────────────────────
+_openrouter_key = os.getenv('OPENROUTER_API_KEY', '')
+_openrouter_ready = bool(_openrouter_key)
 
 # ── Auth helpers ───────────────────────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -159,6 +171,68 @@ async def increment_usage(user_id: str, content_type: str):
     )
 
 
+def _is_safe_url(url: str) -> bool:
+    """Block SSRF: reject non-http(s) schemes and private/loopback IPs."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname or ""
+        if not host:
+            return False
+        blocked_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+        if host.lower() in blocked_hosts:
+            return False
+        try:
+            addr = ipaddress.ip_address(host)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                return False
+        except ValueError:
+            pass  # hostname, not a bare IP — allow
+        return True
+    except Exception:
+        return False
+
+
+async def _safe_http_get(url: str, headers: dict | None = None, max_redirects: int = 5) -> httpx.Response:
+    """GET with manual redirect following — re-validates every hop with _is_safe_url.
+
+    Raises HTTPException(400) if any redirect target is a private/loopback address.
+    """
+    from urllib.parse import urljoin
+    current_url = url
+    for _ in range(max_redirects):
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False, headers=headers or {}) as client:
+            response = await client.get(current_url)
+        if response.is_redirect:
+            location = response.headers.get("location", "")
+            if not location.startswith("http"):
+                location = urljoin(current_url, location)
+            if not _is_safe_url(location):
+                raise HTTPException(status_code=400, detail="URL redirects to a disallowed destination")
+            current_url = location
+        else:
+            return response
+    raise HTTPException(status_code=400, detail="Too many redirects")
+
+
+# NOTE: in-process rate limiter — state resets on restart and is not shared
+# across multiple workers. Sufficient for single-process deployments (Docker
+# Compose, Supervisor). Upgrade to a Redis-backed limiter (e.g. slowapi +
+# redis) when running multiple uvicorn workers.
+_rate_store: dict = defaultdict(list)
+_RATE_LIMITS = {
+    "/api/magic-button": 5,
+    "/api/magic-launch-pack": 5,
+    "/api/create-complete-video": 10,
+    "/api/generate-script": 20,
+    "/api/generate-voiceover": 20,
+    "/api/scrape": 30,
+    "/api/auth/register": 10,
+    "/api/auth/login": 20,
+}
+
 app = FastAPI()
 
 app.add_middleware(
@@ -168,6 +242,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    limit = _RATE_LIMITS.get(path)
+    if limit:
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        _rate_store[ip] = [t for t in _rate_store[ip] if now - t < 60]
+        if len(_rate_store[ip]) >= limit:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please wait a moment and try again."}
+            )
+        _rate_store[ip].append(now)
+    return await call_next(request)
+
+
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        await db.command("ping")
+        logger.info("MongoDB connection: OK")
+    except Exception as e:
+        logger.error(f"MongoDB connection failed on startup: {e}")
+
 
 api_router = APIRouter(prefix="/api")
 
@@ -186,15 +287,24 @@ class BrandData(BaseModel):
     features: List[str]
     description: str
 
+_ALLOWED_FRAMEWORKS = {"PAS", "Step-by-Step", "Before/After"}
+
 class ScriptRequest(BaseModel):
     framework: str
-    product_name: str
-    target_audience: str
+    product_name: str = Field(max_length=200)
+    target_audience: str = Field(max_length=200)
     key_features: List[str]
     brand_context: Optional[str] = None
 
+    @field_validator("framework")
+    @classmethod
+    def validate_framework(cls, v: str) -> str:
+        if v not in _ALLOWED_FRAMEWORKS:
+            raise ValueError(f"framework must be one of: {', '.join(sorted(_ALLOWED_FRAMEWORKS))}")
+        return v
+
 class VoiceoverRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=5000)
     voice_name: str = "en-US-Neural2-A"
     speaking_rate: float = 1.0
 
@@ -204,7 +314,7 @@ class VideoRequest(BaseModel):
     format: str = "16:9"
 
 class CompleteVideoRequest(BaseModel):
-    script: str
+    script: str = Field(max_length=5000)
     images: List[str] = []
     brand_colors: List[str] = ["#6366f1", "#8b5cf6"]
     format: str = "16:9"
@@ -242,8 +352,41 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+async def send_email(to_email: str, to_name: str, subject: str, html: str) -> bool:
+    """Send a transactional email via Brevo. Returns True on success."""
+    if not BREVO_API_KEY:
+        logger.warning("BREVO_API_KEY not set — email not sent to %s", to_email)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
+                json={
+                    "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
+                    "to": [{"email": to_email, "name": to_name}],
+                    "subject": subject,
+                    "htmlContent": html,
+                },
+            )
+        if resp.status_code not in (200, 201):
+            logger.error("Brevo error %s: %s", resp.status_code, resp.text)
+            return False
+        return True
+    except Exception as e:
+        logger.error("send_email failed: %s", e)
+        return False
+
 
 def truncate_to_sentences(text: str, max_chars: int = 800) -> str:
     if len(text) <= max_chars:
@@ -258,9 +401,10 @@ def truncate_to_sentences(text: str, max_chars: int = 800) -> str:
     return result.strip() or text[:max_chars]
 
 
-def extract_colors_from_image(image_url: str, num_colors: int = 5) -> List[str]:
+async def extract_colors_from_image(image_url: str, num_colors: int = 5) -> List[str]:
     try:
-        response = requests.get(image_url, timeout=10, verify=False)
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+            response = await client.get(image_url)
         img = Image.open(io.BytesIO(response.content))
         img = img.convert('RGB')
         img = img.resize((150, 150))
@@ -269,7 +413,7 @@ def extract_colors_from_image(image_url: str, num_colors: int = 5) -> List[str]:
         dominant_colors = color_counts.most_common(num_colors)
         hex_colors = [f"#{r:02x}{g:02x}{b:02x}" for (r, g, b), _ in dominant_colors]
         return hex_colors
-    except:
+    except Exception:
         return ["#6366f1", "#8b5cf6", "#10b981"]
 
 
@@ -398,9 +542,11 @@ Return ONLY the ffmpeg command as a single line. No markdown, no explanation. Us
 
 @api_router.post("/scrape")
 async def scrape_url(url: str = Form(...)):
+    if not _is_safe_url(url):
+        raise HTTPException(status_code=400, detail="Invalid or disallowed URL")
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=10, verify=False)
+        ua_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = await _safe_http_get(url, headers=ua_headers)
         soup = BeautifulSoup(response.text, 'html.parser')
 
         title = soup.find('title')
@@ -425,10 +571,12 @@ async def scrape_url(url: str = Form(...)):
                 if not img_url.startswith('http'):
                     from urllib.parse import urljoin
                     img_url = urljoin(url, img_url)
-                extracted = extract_colors_from_image(img_url)
-                if extracted:
-                    colors = extracted
-        except:
+                # SSRF check on the image URL before fetching
+                if _is_safe_url(img_url):
+                    extracted = await extract_colors_from_image(img_url)
+                    if extracted:
+                        colors = extracted
+        except Exception:
             pass
 
         brand_data = {
@@ -445,76 +593,177 @@ async def scrape_url(url: str = Form(...)):
         raise HTTPException(status_code=400, detail=f"Failed to scrape URL: {str(e)}")
 
 
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
+    file_id = str(uuid.uuid4())
+    file_ext = Path(file.filename).suffix
+    file_path = UPLOADS_DIR / f"{file_id}{file_ext}"
+    total = 0
     try:
-        file_id = str(uuid.uuid4())
-        file_ext = Path(file.filename).suffix
-        file_path = UPLOADS_DIR / f"{file_id}{file_ext}"
-
         async with aiofiles.open(file_path, 'wb') as f:
-            content = await file.read()
-            await f.write(content)
-
+            chunk_size = 256 * 1024  # 256 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="File too large. Maximum size is 50 MB.")
+                await f.write(chunk)
         return {
             "id": file_id,
             "filename": file.filename,
             "path": str(file_path),
             "type": file_type,
-            "size": len(content)
+            "size": total
         }
+    except HTTPException:
+        file_path.unlink(missing_ok=True)
+        raise
     except Exception as e:
+        file_path.unlink(missing_ok=True)
         logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}")
+
+
+@api_router.delete("/upload/{file_id}")
+async def delete_upload(file_id: str):
+    # Prevent path traversal: file_id must be a plain UUID
+    if not re.match(r'^[0-9a-f\-]{36}$', file_id):
+        raise HTTPException(status_code=400, detail="Invalid file ID")
+    matches = list(UPLOADS_DIR.glob(f"{file_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="File not found")
+    for f in matches:
+        f.unlink(missing_ok=True)
+    return {"deleted": file_id}
+
+
+def _build_script_prompt(request: "ScriptRequest") -> str:
+    features = ', '.join(request.key_features) if request.key_features else "easy, fast, reliable"
+    frameworks = {
+        "PAS": f"""Write a 60-second video ad script for {request.product_name} using Problem-Agitate-Solution.
+Target audience: {request.target_audience}
+Key features: {features}
+Structure: Problem (15s) → Agitate (20s) → Solution (25s) with CTA.
+Be conversational and authentic. Return only the script text.""",
+
+        "Step-by-Step": f"""Write a 60-second tutorial script for {request.product_name}.
+Target audience: {request.target_audience}
+Key features: {features}
+Structure: Intro (10s) → 3 clear steps (40s) → Encouragement + CTA (10s).
+Be simple and encouraging. Return only the script text.""",
+
+        "Before/After": f"""Write a 60-second Before/After transformation script for {request.product_name}.
+Target audience: {request.target_audience}
+Key features: {features}
+Structure: Before struggle (20s) → Discovery (10s) → After transformation (30s).
+Be emotional and aspirational. Return only the script text.""",
+    }
+    return frameworks.get(request.framework, frameworks["PAS"])
+
+
+def _template_script(request: "ScriptRequest") -> str:
+    """Emergency fallback — no AI required. Returns a fill-in-the-blank script."""
+    name = request.product_name
+    audience = request.target_audience
+    features = request.key_features or ["fast", "easy", "reliable"]
+    f1, f2, f3 = (features + features + features)[:3]
+
+    if request.framework == "PAS":
+        return (
+            f"Are you tired of struggling with the same old problems? "
+            f"As {audience}, you deserve better. "
+            f"Every day without the right tool costs you time and energy. "
+            f"That's exactly why {name} was built for you. "
+            f"With {f1}, {f2}, and {f3}, it changes everything. "
+            f"Try {name} today — your future self will thank you."
+        )
+    elif request.framework == "Before/After":
+        return (
+            f"Before {name}: endless frustration, wasted hours, no results. "
+            f"Then everything changed. "
+            f"After {name}: {f1} in minutes, {f2} without the headache, and {f3} every single time. "
+            f"{audience} everywhere are making the switch. "
+            f"Your transformation starts now — try {name} free today."
+        )
+    else:  # Step-by-Step
+        return (
+            f"Getting started with {name} is simple. "
+            f"Step one: sign up in under 60 seconds. "
+            f"Step two: {f1} — done automatically for you. "
+            f"Step three: enjoy {f2} and {f3} from day one. "
+            f"That's it. Join thousands of {audience} already using {name}. Start free today."
+        )
+
+
+async def _gemini_generate(prompt: str) -> str:
+    """Try Gemini 2.5 Flash. Raises on failure."""
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(None, lambda: gemini_model.generate_content(prompt))
+    text = response.text.strip()
+    if not text:
+        raise ValueError("Gemini returned empty response")
+    return text
+
+
+async def _openrouter_generate(prompt: str) -> str:
+    """Try OpenRouter (mistral-7b-instruct as free fallback). Raises on failure."""
+    headers = {
+        "Authorization": f"Bearer {_openrouter_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://swiftpackai.tech",
+        "X-Title": "SwiftPack AI",
+    }
+    payload = {
+        "model": "mistralai/mistral-7b-instruct:free",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 400,
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"].strip()
+    if not text:
+        raise ValueError("OpenRouter returned empty response")
+    return text
 
 
 @api_router.post("/generate-script")
 async def generate_script(request: ScriptRequest, user = Depends(get_optional_user)):
     if user:
         await check_usage_limit(user, "scripts")
-    if not _gemini_ready or gemini_model is None:
-        raise HTTPException(
-            status_code=500,
-            detail="GEMINI_API_KEY not configured. Add your key from https://aistudio.google.com/apikey to backend/.env"
-        )
 
-    frameworks = {
-        "PAS": f"""Write a 60-second video ad script for {request.product_name} using Problem-Agitate-Solution.
-Target audience: {request.target_audience}
-Key features: {', '.join(request.key_features)}
-Structure: Problem (15s) → Agitate (20s) → Solution (25s) with CTA.
-Be conversational and authentic. Return only the script text.""",
-
-        "Step-by-Step": f"""Write a 60-second tutorial script for {request.product_name}.
-Target audience: {request.target_audience}
-Key features: {', '.join(request.key_features)}
-Structure: Intro (10s) → 3 clear steps (40s) → Encouragement + CTA (10s).
-Be simple and encouraging. Return only the script text.""",
-
-        "Before/After": f"""Write a 60-second Before/After transformation script for {request.product_name}.
-Target audience: {request.target_audience}
-Key features: {', '.join(request.key_features)}
-Structure: Before struggle (20s) → Discovery (10s) → After transformation (30s).
-Be emotional and aspirational. Return only the script text."""
-    }
-
-    prompt = frameworks.get(request.framework, frameworks["PAS"])
-
+    prompt = _build_script_prompt(request)
     script_text = None
-    last_err = None
-    for attempt in range(2):
-        try:
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, lambda: gemini_model.generate_content(prompt))
-            script_text = response.text.strip()
-            if script_text:
-                break
-        except Exception as e:
-            last_err = e
-            logger.warning(f"Gemini attempt {attempt+1} failed: {e}")
+    source = "unknown"
 
+    # Tier 1 — Gemini
+    if _gemini_ready and gemini_model is not None:
+        for attempt in range(2):
+            try:
+                script_text = await _gemini_generate(prompt)
+                source = "gemini"
+                break
+            except Exception as e:
+                logger.warning(f"Gemini attempt {attempt + 1} failed: {e}")
+
+    # Tier 2 — OpenRouter
+    if not script_text and _openrouter_ready:
+        try:
+            script_text = await _openrouter_generate(prompt)
+            source = "openrouter"
+            logger.info("Script generated via OpenRouter fallback")
+        except Exception as e:
+            logger.warning(f"OpenRouter fallback failed: {e}")
+
+    # Tier 3 — Template (always works)
     if not script_text:
-        raise HTTPException(status_code=500, detail=f"Gemini script generation failed: {last_err}")
+        script_text = _template_script(request)
+        source = "template"
+        logger.info("Script generated via template emergency fallback")
 
     script_doc = {
         "id": str(uuid.uuid4()),
@@ -522,7 +771,8 @@ Be emotional and aspirational. Return only the script text."""
         "content": script_text,
         "product_name": request.product_name,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "type": "script"
+        "type": "script",
+        "source": source,
     }
     if user:
         script_doc["user_id"] = user["id"]
@@ -646,7 +896,12 @@ async def create_video(background_tasks: BackgroundTasks, video_type: str = Form
                 f"-map \"[v]\" -threads 2 -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -y \"{output_path}\""
             )
         else:
-            valid_images = [p for p in image_list[:5] if Path(p).exists()]
+            uploads_resolved = UPLOADS_DIR.resolve()
+            valid_images = [
+                p for p in image_list[:5]
+                if Path(p).exists()
+                and str(Path(p).resolve()).startswith(str(uploads_resolved))
+            ]
             if valid_images:
                 inputs = " ".join(f"-loop 1 -t 3 -i \"{p}\"" for p in valid_images)
                 filter_parts = "".join(
@@ -692,6 +947,11 @@ async def create_video(background_tasks: BackgroundTasks, video_type: str = Form
 async def create_poster(request: PosterRequest, user = Depends(get_optional_user)):
     if user:
         await check_usage_limit(user, "posters")
+
+    # Assign path before try so the except block can clean it up
+    poster_id = str(uuid.uuid4())
+    poster_path = OUTPUTS_DIR / f"{poster_id}.png"
+
     try:
         if request.format == "1:1":
             width, height = 1080, 1080
@@ -718,13 +978,13 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
             try:
                 title_font = ImageFont.truetype(fp, 80)
                 break
-            except:
+            except Exception:
                 pass
         for fp in _sub_candidates:
             try:
                 subtitle_font = ImageFont.truetype(fp, 40)
                 break
-            except:
+            except Exception:
                 pass
 
         text_color = "#ffffff"
@@ -744,8 +1004,6 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
             sub_y = text_y + text_height + 50
             draw.text((sub_x, sub_y), request.subtext, fill=text_color, font=subtitle_font)
 
-        poster_id = str(uuid.uuid4())
-        poster_path = OUTPUTS_DIR / f"{poster_id}.png"
         img.save(poster_path)
 
         poster_doc = {
@@ -766,7 +1024,11 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
             "url": f"/api/download/{poster_id}.png",
             "format": request.format
         }
+    except HTTPException:
+        poster_path.unlink(missing_ok=True)
+        raise
     except Exception as e:
+        poster_path.unlink(missing_ok=True)
         logger.error(f"Poster creation error: {e}")
         raise HTTPException(status_code=500, detail=f"Poster creation failed: {str(e)}")
 
@@ -870,30 +1132,56 @@ async def magic_button(request: MagicButtonRequest):
 
 @api_router.get("/download/{filename}")
 async def download_file(filename: str):
-    file_path = OUTPUTS_DIR / filename
+    file_path = (OUTPUTS_DIR / filename).resolve()
+    if not str(file_path).startswith(str(OUTPUTS_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
 
 
 @api_router.get("/projects")
-async def get_projects():
-    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
+async def get_projects(user = Depends(get_optional_user)):
+    if not user:
+        return []
+    projects = await db.projects.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
     return projects
 
 
 @api_router.post("/projects")
-async def create_project(name: str = Form(...)):
+async def create_project(name: str = Form(...), user = Depends(get_optional_user)):
     project = Project(name=name)
     doc = project.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    if user:
+        doc['user_id'] = user["id"]
     await db.projects.insert_one(doc)
     return project
 
 
+@api_router.delete("/projects/{project_id}")
+async def delete_project(project_id: str, user = Depends(get_optional_user)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required to delete projects")
+    result = await db.projects.delete_one({"id": project_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found or not yours")
+    return {"deleted": project_id}
+
+
+@api_router.get("/health")
+async def health_check():
+    try:
+        await db.command("ping")
+        db_status = "ok"
+    except Exception:
+        db_status = "error"
+    return {"status": "ok", "db": db_status}
+
+
 @api_router.get("/")
 async def root():
-    return {"message": "JobHuntPro Content Studio API"}
+    return {"message": "SwiftPack AI API"}
 
 
 # ── Auth Router ────────────────────────────────────────────────────────────────
@@ -907,6 +1195,7 @@ async def register(req: RegisterRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = str(uuid.uuid4())
+    verification_token = secrets.token_urlsafe(32)
     user = {
         "id": user_id,
         "email": req.email.lower(),
@@ -915,11 +1204,30 @@ async def register(req: RegisterRequest):
         "tier": "free",
         "google_id": None,
         "stripe_customer_id": None,
+        "email_verified": False,
+        "email_verification_token": verification_token,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one({**user, "_id": user_id})
+    verify_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
+    await send_email(
+        to_email=req.email.lower(),
+        to_name=req.name,
+        subject="Verify your SwiftPack AI email",
+        html=f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#6366f1">Welcome to SwiftPack AI!</h2>
+          <p>Hi {req.name}, please verify your email address to get started.</p>
+          <a href="{verify_link}"
+             style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+            Verify Email
+          </a>
+          <p style="color:#888;font-size:13px">Link expires in 24 hours. If you didn't sign up, ignore this email.</p>
+        </div>
+        """
+    )
     token = create_jwt(user_id)
-    safe = {k: v for k, v in user.items() if k != "hashed_password"}
+    safe = {k: v for k, v in user.items() if k not in ("hashed_password", "email_verification_token")}
     return {"token": token, "user": safe}
 
 @auth_router.post("/login")
@@ -942,37 +1250,140 @@ async def me(user = Depends(get_current_user)):
     safe["limits"] = FREE_TIER_LIMITS if safe.get("tier") == "free" else None
     return safe
 
+@auth_router.get("/verify-email")
+async def verify_email(token: str):
+    user = await db.users.find_one({"email_verification_token": token})
+    if not user:
+        return RedirectResponse(f"{FRONTEND_URL}/verify-email?status=invalid")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"email_verified": True}, "$unset": {"email_verification_token": ""}}
+    )
+    return RedirectResponse(f"{FRONTEND_URL}/verify-email?status=success")
+
+
+@auth_router.post("/resend-verification")
+async def resend_verification(user=Depends(get_current_user)):
+    if user.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Email already verified")
+    verification_token = secrets.token_urlsafe(32)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"email_verification_token": verification_token}}
+    )
+    verify_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
+    await send_email(
+        to_email=user["email"],
+        to_name=user.get("name", ""),
+        subject="Verify your SwiftPack AI email",
+        html=f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#6366f1">Verify your email</h2>
+          <p>Click the button below to verify your SwiftPack AI account.</p>
+          <a href="{verify_link}"
+             style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+            Verify Email
+          </a>
+          <p style="color:#888;font-size:13px">Link expires in 24 hours.</p>
+        </div>
+        """
+    )
+    return {"message": "Verification email sent"}
+
+
+@auth_router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    # Always return success to prevent email enumeration
+    user = await db.users.find_one({"email": req.email.lower()})
+    if user and user.get("hashed_password"):  # only email/password accounts
+        reset_token = secrets.token_urlsafe(32)
+        reset_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"password_reset_token": reset_token, "password_reset_expires": reset_expires}}
+        )
+        reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
+        await send_email(
+            to_email=user["email"],
+            to_name=user.get("name", ""),
+            subject="Reset your SwiftPack AI password",
+            html=f"""
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+              <h2 style="color:#6366f1">Reset your password</h2>
+              <p>We received a request to reset your password. Click the button below to set a new one.</p>
+              <a href="{reset_link}"
+                 style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+                Reset Password
+              </a>
+              <p style="color:#888;font-size:13px">This link expires in 1 hour. If you didn't request this, ignore it — your password won't change.</p>
+            </div>
+            """
+        )
+    return {"message": "If an account exists with that email, a reset link has been sent"}
+
+
+@auth_router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = await db.users.find_one({"password_reset_token": req.token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    expires = user.get("password_reset_expires", "")
+    if expires and datetime.fromisoformat(expires) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {"hashed_password": hash_password(req.password)},
+            "$unset": {"password_reset_token": "", "password_reset_expires": ""}
+        }
+    )
+    return {"message": "Password updated successfully"}
+
+
 @auth_router.get("/google")
-async def google_oauth_redirect():
+async def google_oauth_redirect(response: Response):
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth not configured. Set GOOGLE_CLIENT_ID in backend/.env")
+    state = secrets.token_urlsafe(32)
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": f"{BACKEND_URL}/api/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
-        "prompt": "select_account"
+        "prompt": "select_account",
+        "state": state
     }
-    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}")
+    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}")
+    redirect.set_cookie("oauth_state", state, httponly=True, samesite="lax", max_age=600)
+    return redirect
 
 @auth_router.get("/google/callback")
-async def google_oauth_callback(code: str):
+async def google_oauth_callback(code: str, state: str = "", request: Request = None):
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
-    token_resp = requests.post("https://oauth2.googleapis.com/token", data={
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": f"{BACKEND_URL}/api/auth/google/callback",
-        "grant_type": "authorization_code"
-    })
-    tokens = token_resp.json()
-    if "error" in tokens:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_failed")
-    user_info = requests.get("https://www.googleapis.com/userinfo/v2/me", headers={
-        "Authorization": f"Bearer {tokens['access_token']}"
-    }).json()
+    # Validate CSRF state — reject if cookie is absent or mismatched
+    expected_state = request.cookies.get("oauth_state") if request else None
+    if not expected_state or state != expected_state:
+        return RedirectResponse(f"{FRONTEND_URL}/login?error=invalid_state")
+    async with httpx.AsyncClient(timeout=10) as client:
+        token_resp = await client.post("https://oauth2.googleapis.com/token", data={
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": f"{BACKEND_URL}/api/auth/google/callback",
+            "grant_type": "authorization_code"
+        })
+        tokens = token_resp.json()
+        if "error" in tokens:
+            return RedirectResponse(f"{FRONTEND_URL}/login?error=google_failed")
+        user_info_resp = await client.get(
+            "https://www.googleapis.com/userinfo/v2/me",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"}
+        )
+        user_info = user_info_resp.json()
     google_id = user_info.get("id")
     email = user_info.get("email", "").lower()
     name = user_info.get("name", email.split("@")[0])
@@ -994,7 +1405,10 @@ async def google_oauth_callback(code: str):
         }
         await db.users.insert_one({**user, "_id": user_id})
     token = create_jwt(user["id"])
-    return RedirectResponse(f"{FRONTEND_URL}?token={token}")
+    # Use fragment (#) so the token is never sent to the server in Referer headers
+    redirect = RedirectResponse(f"{FRONTEND_URL}/#token={token}")
+    redirect.delete_cookie("oauth_state")
+    return redirect
 
 
 # ── Billing Router ─────────────────────────────────────────────────────────────

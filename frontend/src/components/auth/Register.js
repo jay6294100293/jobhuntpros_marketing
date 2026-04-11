@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Mail, Lock, User, Chrome, Loader2 } from 'lucide-react';
+import { Sparkles, Mail, Lock, User, Chrome, Loader2, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 
@@ -9,6 +9,7 @@ export const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
@@ -19,8 +20,7 @@ export const Register = () => {
     setLoading(true);
     try {
       await register(email, password, name);
-      toast.success('Account created! Welcome to JobHuntPro Studio.');
-      navigate('/');
+      setRegistered(true);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Registration failed');
     } finally {
@@ -35,11 +35,27 @@ export const Register = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">JobHuntPro Studio</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
           <p className="text-zinc-400 mt-2">Create your free account</p>
         </div>
 
         <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-xl p-8 space-y-6">
+          {registered ? (
+            <div className="text-center space-y-4">
+              <CheckCircle className="w-16 h-16 mx-auto text-emerald-400" />
+              <h2 className="text-xl font-semibold">Account created!</h2>
+              <p className="text-zinc-400 text-sm">
+                We sent a verification link to <span className="text-zinc-200">{email}</span>. Check your inbox to activate your account.
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          ) : (
+          <>
           <button
             onClick={loginWithGoogle}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition-colors"
@@ -114,6 +130,8 @@ export const Register = () => {
               <Link to="/login" className="text-indigo-400 hover:text-indigo-300">Sign in</Link>
             </p>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

@@ -33,7 +33,7 @@ export const Login = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">JobHuntPro Studio</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
           <p className="text-zinc-400 mt-2">Sign in to your account</p>
         </div>
 
@@ -68,7 +68,10 @@ export const Login = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-zinc-300">Password</label>
+                <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300">Forgot password?</Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input

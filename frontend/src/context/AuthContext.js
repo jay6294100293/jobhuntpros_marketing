@@ -37,10 +37,11 @@ export const AuthProvider = ({ children }) => {
       .finally(() => setLoading(false));
   }, [token, applyToken]);
 
-  // Handle ?token= from Google OAuth redirect
+  // Handle OAuth redirect: token can arrive as URL fragment (#token=...) or legacy query param (?token=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const oauthToken = params.get('token');
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const oauthToken = hashParams.get('token') || params.get('token');
     const upgraded = params.get('upgraded');
     if (oauthToken) {
       applyToken(oauthToken);
