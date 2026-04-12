@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2 } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Steps with cumulative % and estimated duration in seconds
+const STEPS = [
+  { label: 'Analyzing website',       pct: 8,   duration: 4  },
+  { label: 'Extracting brand colors', pct: 14,  duration: 3  },
+  { label: 'Writing ad script',       pct: 30,  duration: 12 },
+  { label: 'Writing tutorial script', pct: 46,  duration: 12 },
+  { label: 'Rendering ad video',      pct: 68,  duration: 20 },
+  { label: 'Rendering tutorial video',pct: 88,  duration: 18 },
+  { label: 'Creating social posters', pct: 96,  duration: 5  },
+  { label: 'Packaging results',       pct: 100, duration: 2  },
+];
 
 export const Dashboard = () => {
   const [url, setUrl] = useState('');
@@ -13,22 +25,63 @@ export const Dashboard = () => {
   const [targetAudience, setTargetAudience] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef(null);
+  const stepTimerRef = useRef(null);
+  const startTimeRef = useRef(null);
   const navigate = useNavigate();
-  
+
+  const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
+
+  const startProgress = () => {
+    setProgress(0);
+    setStepIdx(0);
+    setElapsed(0);
+    startTimeRef.current = Date.now();
+
+    // Tick elapsed every second
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+
+    // Advance through steps
+    let idx = 0;
+    const advance = () => {
+      if (idx >= STEPS.length) return;
+      setStepIdx(idx);
+      setProgress(STEPS[idx].pct);
+      const next = STEPS[idx + 1];
+      if (next) {
+        stepTimerRef.current = setTimeout(advance, STEPS[idx].duration * 1000);
+      }
+      idx++;
+    };
+    advance();
+  };
+
+  const stopProgress = () => {
+    clearInterval(timerRef.current);
+    clearTimeout(stepTimerRef.current);
+  };
+
   const handleMagicButton = async () => {
     if (!url || !productName || !targetAudience) {
       toast.error('Please fill in all fields');
       return;
     }
-    
+
     setLoading(true);
+    startProgress();
     try {
       const response = await axios.post(`${API}/magic-button`, {
         url,
         product_name: productName,
         target_audience: targetAudience
       });
-      
+
+      setProgress(100);
       setResults(response.data);
       toast.success('Launch Pack generated successfully!');
     } catch (error) {
@@ -36,6 +89,7 @@ export const Dashboard = () => {
       const detail = error?.response?.data?.detail || error?.message || 'Failed to generate content';
       toast.error(detail);
     } finally {
+      stopProgress();
       setLoading(false);
     }
   };
@@ -107,7 +161,7 @@ export const Dashboard = () => {
               onClick={handleMagicButton}
               disabled={loading}
               data-testid="magic-button"
-              className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 text-white font-bold px-8 py-4 rounded-lg shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 text-white font-bold px-8 py-4 rounded-lg shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {loading ? (
                 <>
@@ -122,6 +176,52 @@ export const Dashboard = () => {
                 </>
               )}
             </button>
+
+            {/* Progress panel */}
+            {loading && (
+              <div className="mt-4 bg-zinc-950/60 border border-zinc-800 rounded-xl p-5 space-y-4">
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
+                    <span className="text-indigo-400 font-medium">{STEPS[stepIdx]?.label}…</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-[2000ms] ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Steps list */}
+                <div className="space-y-1.5">
+                  {STEPS.map((step, i) => {
+                    const done = i < stepIdx;
+                    const active = i === stepIdx;
+                    return (
+                      <div key={i} className={`flex items-center gap-2 text-xs transition-opacity ${active ? 'opacity-100' : done ? 'opacity-50' : 'opacity-25'}`}>
+                        {done ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        ) : active ? (
+                          <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin flex-shrink-0" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 rounded-full border border-zinc-700 flex-shrink-0" />
+                        )}
+                        <span className={active ? 'text-zinc-200' : done ? 'text-zinc-500' : 'text-zinc-700'}>{step.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Time estimate */}
+                <p className="text-xs text-zinc-600 text-center">
+                  {elapsed < TOTAL_EST
+                    ? `~${Math.max(0, TOTAL_EST - elapsed)}s remaining`
+                    : 'Almost done…'}
+                </p>
+              </div>
+            )}
           </div>
         </div>
         
