@@ -537,7 +537,7 @@ def _build_slideshow_ffmpeg(
     fs = max(28, width // 28)
 
     def _clean(s: str) -> str:
-        return s.replace("'", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ")[:70]
+        return s.replace("'", "").replace("`", "").replace("$", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ").replace("[", "").replace("]", "").replace("*", "").replace("#", "")[:70]
 
     # Build input args: each image loops for its slice duration
     inputs = ""
@@ -581,7 +581,7 @@ def _build_slideshow_ffmpeg(
     caption_filter = ",".join(drawtext_parts)
     filter_complex = ";".join(filter_parts) + f";[vbase]{caption_filter}[vout]"
 
-    audio_part = f" -i \"{audio_path}\" -map \"[vout]\" -map 1:a -c:a aac -shortest" if audio_path else " -map \"[vout]\""
+    audio_part = f" -i \"{audio_path}\" -map \"[vout]\" -map {n}:a -c:a aac -shortest" if audio_path else " -map \"[vout]\""
     return (
         f"\"{FFMPEG_BIN}\"{inputs}"
         f" -filter_complex \"{filter_complex}\""
@@ -628,7 +628,7 @@ def _fallback_ffmpeg(sentences, color1, width, height, duration_per_caption, aud
 
     def _clean(s):
         # Remove chars that break FFmpeg filter syntax
-        return s.replace("'", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ")[:70]
+        return s.replace("'", "").replace("`", "").replace("$", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ").replace("[", "").replace("]", "").replace("*", "").replace("#", "")[:70]
 
     drawtext_parts = []
     for i, s in enumerate(sentences):
