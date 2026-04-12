@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
@@ -24,8 +24,11 @@ const ProtectedApp = () => {
 
   if (loading) return null;
 
-  // Show agreement modal for logged-in users who haven't accepted yet
-  if (user && user.has_agreed === false) {
+  // Not logged in — redirect to login
+  if (!user) return <Navigate to="/login" replace />;
+
+  // Logged in but hasn't accepted the beta agreement yet
+  if (user.has_agreed === false) {
     return <BetaAgreementModal onAccepted={acceptAgreement} />;
   }
 
