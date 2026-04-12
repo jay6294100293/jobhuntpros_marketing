@@ -966,64 +966,105 @@ def _build_slideshow_ffmpeg(
     color1: str, width: int, height: int,
     total_duration: float, audio_path: Optional[str], output_path: str
 ) -> str:
-    """Build FFmpeg command that uses images as a Ken-Burns slideshow with captions."""
+    """
+    Build FFmpeg command: Ken-Burns slideshow with xfade crossfade transitions,
+    caption overlay, and branded progress bar.
+    """
     n = len(image_paths)
-    dur_per_image = total_duration / n
-    dur_per_cap = total_duration / max(len(sentences), 1)
+    XFADE_DUR = 0.5          # seconds of crossfade overlap between slides
+    XFADE_FPS = 24
+    # Each input clip needs to be slightly longer than the visible window so the
+    # xfade filter has frames to blend with. We keep the *visible* duration per
+    # slide constant and increase the input clip length by the crossfade duration.
+    dur_per_slide = total_duration / n          # visible duration each slide contributes
+    clip_dur = dur_per_slide + XFADE_DUR        # input clip length (with tail for blending)
+    # True output duration after chaining xfades:
+    #   n slides × dur_per_slide − (n−1) × XFADE_DUR  (overlaps cancel out)
+    actual_duration = n * dur_per_slide - (n - 1) * XFADE_DUR
+
+    # Rotate through a small set of transitions for visual variety
+    _TRANSITIONS = ["fade", "slideleft", "slideright", "wipeleft", "wiperight", "fadeblack"]
     c1 = _to_ffmpeg_color(color1)
     fs = max(28, width // 28)
 
     def _clean(s: str) -> str:
-        return s.replace("'", "").replace("`", "").replace("$", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ").replace("[", "").replace("]", "").replace("*", "").replace("#", "")[:70]
+        return (s.replace("'", "").replace("`", "").replace("$", "")
+                 .replace(":", " ").replace("\\", "").replace('"', "")
+                 .replace("\n", " ").replace("[", "").replace("]", "")
+                 .replace("*", "").replace("#", ""))[:70]
 
-    # Build input args: each image loops for its slice duration
+    # ── Inputs ────────────────────────────────────────────────────────────────
+    # Each image loops for clip_dur (slightly longer than its visible window)
     inputs = ""
     for p in image_paths:
-        inputs += f" -loop 1 -t {dur_per_image:.2f} -i \"{p}\""
+        inputs += f" -loop 1 -t {clip_dur:.3f} -i \"{p}\""
 
-    # Build filter_complex: scale+pad each image, apply zoompan, concat
+    # ── filter_complex ────────────────────────────────────────────────────────
     filter_parts = []
+
+    # 1. Per-clip: scale → crop → zoompan → format (yuv420p required by xfade)
     for i in range(n):
-        # Scale to fill canvas (cover), then pad to exact size
         filter_parts.append(
             f"[{i}:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},"
-            f"zoompan=z='min(zoom+0.0008,1.2)':d={int(dur_per_image*24)}:"
-            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps=24[v{i}]"
+            f"zoompan=z='min(zoom+0.0008,1.2)':d={int(clip_dur * XFADE_FPS)}:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={XFADE_FPS},"
+            f"format=yuv420p[v{i}]"
         )
 
-    concat_inputs = "".join(f"[v{i}]" for i in range(n))
-    filter_parts.append(f"{concat_inputs}concat=n={n}:v=1:a=0[vbase]")
+    # 2. Chain xfade filters between consecutive clips
+    #    offset[i] = (i+1) × (dur_per_slide − XFADE_DUR)
+    #    i.e. the point in the *output* stream where slide i+1 begins to appear
+    if n == 1:
+        # Single clip — no transition needed
+        filter_parts.append(f"[v0]null[vbase]")
+    else:
+        prev_label = "v0"
+        for i in range(n - 1):
+            transition = _TRANSITIONS[i % len(_TRANSITIONS)]
+            offset = (i + 1) * (dur_per_slide - XFADE_DUR)
+            next_label = f"v{i+1}"
+            out_label = "vbase" if i == n - 2 else f"xf{i}"
+            filter_parts.append(
+                f"[{prev_label}][{next_label}]"
+                f"xfade=transition={transition}:duration={XFADE_DUR:.3f}:offset={offset:.3f}"
+                f"[{out_label}]"
+            )
+            prev_label = out_label
 
-    # Add captions as drawtext on top of [vbase]
+    # 3. Captions: timed to actual_duration timeline (one caption per sentence)
+    dur_per_cap = actual_duration / max(len(sentences), 1)
     drawtext_parts = []
     for i, s in enumerate(sentences):
         t_start = i * dur_per_cap
         t_end = (i + 1) * dur_per_cap
         txt = _clean(s)
-        # Use drawtext with box=1 for semi-transparent background (avoids drawbox enable issues)
         drawtext_parts.append(
             f"drawtext=text='{txt}':"
             f"fontsize={fs}:fontcolor=white:borderw=2:bordercolor=black:"
             f"box=1:boxcolor=black@0.55:boxborderw=12:"
             f"x=(w-text_w)/2:y=h*0.82:"
-            f"enable='between(t,{t_start:.2f},{t_end:.2f})'"
+            f"enable='between(t,{t_start:.3f},{t_end:.3f})'"
         )
 
-    # Progress bar
+    # 4. Branded progress bar (uses actual_duration)
     drawtext_parts.append(
-        f"drawbox=x=0:y=h-8:w='iw*t/{total_duration:.2f}':h=8:color={c1}@1.0:t=fill"
+        f"drawbox=x=0:y=h-8:w='iw*t/{actual_duration:.3f}':h=8:color={c1}@1.0:t=fill"
     )
 
     caption_filter = ",".join(drawtext_parts)
     filter_complex = ";".join(filter_parts) + f";[vbase]{caption_filter}[vout]"
 
-    audio_part = f" -i \"{audio_path}\" -map \"[vout]\" -map {n}:a -c:a aac -shortest" if audio_path else " -map \"[vout]\""
+    audio_part = (
+        f" -i \"{audio_path}\" -map \"[vout]\" -map {n}:a -c:a aac -shortest"
+        if audio_path else " -map \"[vout]\""
+    )
     return (
         f"\"{FFMPEG_BIN}\"{inputs}"
         f" -filter_complex \"{filter_complex}\""
         f"{audio_part}"
-        f" -t {total_duration:.2f} -threads 2 -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -y \"{output_path}\""
+        f" -t {actual_duration:.3f} -threads 2 -c:v libx264 -preset ultrafast"
+        f" -crf 23 -pix_fmt yuv420p -y \"{output_path}\""
     )
 
 
