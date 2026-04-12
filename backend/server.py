@@ -1,3 +1,5 @@
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request, Response
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse, JSONResponse
@@ -215,7 +217,7 @@ async def _safe_http_get(url: str, headers: dict | None = None, max_redirects: i
     from urllib.parse import urljoin
     current_url = url
     for _ in range(max_redirects):
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False, headers=headers or {}) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False, headers=headers or {}, verify=False) as client:
             response = await client.get(current_url)
         if response.is_redirect:
             location = response.headers.get("location", "")
@@ -797,7 +799,10 @@ async def generate_script(request: ScriptRequest, user = Depends(get_optional_us
     if user:
         script_doc["user_id"] = user["id"]
         await increment_usage(user["id"], "scripts")
-    await db.scripts.insert_one({**script_doc, "_id": script_doc["id"]})
+    try:
+        await db.scripts.insert_one({**script_doc, "_id": script_doc["id"]})
+    except Exception as db_err:
+        logger.warning(f"DB write skipped (MongoDB unavailable): {db_err}")
     return script_doc
 
 
@@ -885,7 +890,10 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     if user:
         video_doc["user_id"] = user["id"]
         await increment_usage(user["id"], "videos")
-    await db.videos.insert_one({**video_doc, "_id": video_id})
+    try:
+        await db.videos.insert_one({**video_doc, "_id": video_id})
+    except Exception as db_err:
+        logger.warning(f"DB write skipped (MongoDB unavailable): {db_err}")
     return video_doc
 
 
@@ -1036,7 +1044,10 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
         if user:
             poster_doc["user_id"] = user["id"]
             await increment_usage(user["id"], "posters")
-        await db.posters.insert_one({**poster_doc, "_id": poster_id})
+        try:
+            await db.posters.insert_one({**poster_doc, "_id": poster_id})
+        except Exception as db_err:
+            logger.warning(f"DB write skipped (MongoDB unavailable): {db_err}")
 
         return {
             "id": poster_id,

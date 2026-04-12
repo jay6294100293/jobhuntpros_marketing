@@ -33,7 +33,8 @@ export const Dashboard = () => {
       toast.success('Launch Pack generated successfully!');
     } catch (error) {
       console.error('Magic button error:', error);
-      toast.error('Failed to generate content');
+      const detail = error?.response?.data?.detail || error?.message || 'Failed to generate content';
+      toast.error(detail);
     } finally {
       setLoading(false);
     }
