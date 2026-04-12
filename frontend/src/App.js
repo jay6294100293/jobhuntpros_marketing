@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -15,7 +16,33 @@ import { ForgotPassword } from './components/auth/ForgotPassword';
 import { ResetPassword } from './components/auth/ResetPassword';
 import { VerifyEmail } from './components/auth/VerifyEmail';
 import { Pricing } from './components/Pricing';
+import { BetaAgreementModal } from './components/BetaAgreementModal';
 import './App.css';
+
+// Wraps all authenticated routes — shows agreement modal until user accepts.
+const ProtectedApp = () => {
+  const { user, loading, acceptAgreement } = useAuth();
+
+  if (loading) return null;
+
+  // Show agreement modal for logged-in users who haven't accepted yet
+  if (user && user.has_agreed === false) {
+    return <BetaAgreementModal onAccepted={acceptAgreement} />;
+  }
+
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/assets" element={<AssetUpload />} />
+        <Route path="/scripts" element={<ScriptGenerator />} />
+        <Route path="/create" element={<CreateContent />} />
+        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/pricing" element={<Pricing />} />
+      </Routes>
+    </Layout>
+  );
+};
 
 function App() {
   return (
@@ -28,21 +55,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route
-            path="/*"
-            element={
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/assets" element={<AssetUpload />} />
-                  <Route path="/scripts" element={<ScriptGenerator />} />
-                  <Route path="/create" element={<CreateContent />} />
-                  <Route path="/gallery" element={<Gallery />} />
-                  <Route path="/pricing" element={<Pricing />} />
-                </Routes>
-              </Layout>
-            }
-          />
+          <Route path="/*" element={<ProtectedApp />} />
         </Routes>
         <Toaster
           position="top-right"

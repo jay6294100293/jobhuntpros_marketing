@@ -43,7 +43,21 @@ except ImportError:
     stripe_lib = None
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+
+# ── Secrets loading ────────────────────────────────────────────────────────────
+# Prefer external secrets file (never in git). Fall back to backend/.env for
+# local dev convenience. Load in priority order: first match wins for each var.
+_SECRETS_CANDIDATES = [
+    Path("/home/ubuntu/secrets/swiftpack.env"),   # Linux production server
+    Path("E:/secrets/swiftpack.env"),              # Windows local development
+]
+for _sc in _SECRETS_CANDIDATES:
+    if _sc.exists():
+        load_dotenv(_sc, override=True)
+        break
+# Also load backend/.env so local devs can override individual vars without
+# touching the shared secrets file. Already gitignored.
+load_dotenv(ROOT_DIR / '.env', override=False)
 
 # ── FFmpeg path detection ──────────────────────────────────────────────────────
 # Check common portable locations first, then fall back to PATH
@@ -82,6 +96,8 @@ if STRIPE_SECRET_KEY and stripe_lib:
 BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
 BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@swiftpackai.tech')
 BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'SwiftPack AI')
+
+ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 
 FREE_TIER_LIMITS = {"scripts": 10, "videos": 5, "posters": 10}
 
@@ -347,6 +363,14 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str
+
+class BetaAccessRequest(BaseModel):
+    """Public beta waitlist sign-up — does NOT create a user account."""
+    email: str
+    name: str = ""
+
+class ApproveBetaUserRequest(BaseModel):
+    email: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -1187,15 +1211,42 @@ async def root():
 # ── Auth Router ────────────────────────────────────────────────────────────────
 auth_router = APIRouter(prefix="/api/auth")
 
+@auth_router.post("/request-beta-access")
+async def request_beta_access(req: BetaAccessRequest):
+    """
+    Beta waitlist endpoint — replaces open registration.
+    Stores the request in beta_users (pending). No account is created here.
+    """
+    email = req.email.lower().strip()
+    existing = await db.beta_users.find_one({"email": email})
+    if existing:
+        # Don't reveal approval status — same message either way
+        return {"message": "Your access request has been received. We will notify you at this email when your account is ready."}
+    await db.beta_users.insert_one({
+        "_id": email,
+        "email": email,
+        "name": req.name.strip(),
+        "is_approved": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": None,
+        "invite_code": None,
+    })
+    logger.info("Beta access requested: %s", email)
+    return {"message": "Your access request has been received. We will notify you at this email when your account is ready."}
+
+
 @auth_router.post("/register")
 async def register(req: RegisterRequest):
+    """
+    Direct registration — kept for admin-created accounts and future use.
+    Not exposed on the public UI during beta.
+    """
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     existing = await db.users.find_one({"email": req.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = str(uuid.uuid4())
-    verification_token = secrets.token_urlsafe(32)
     user = {
         "id": user_id,
         "email": req.email.lower(),
@@ -1204,30 +1255,12 @@ async def register(req: RegisterRequest):
         "tier": "free",
         "google_id": None,
         "stripe_customer_id": None,
-        "email_verified": False,
-        "email_verification_token": verification_token,
+        "email_verified": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one({**user, "_id": user_id})
-    verify_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
-    await send_email(
-        to_email=req.email.lower(),
-        to_name=req.name,
-        subject="Verify your SwiftPack AI email",
-        html=f"""
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-          <h2 style="color:#6366f1">Welcome to SwiftPack AI!</h2>
-          <p>Hi {req.name}, please verify your email address to get started.</p>
-          <a href="{verify_link}"
-             style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
-            Verify Email
-          </a>
-          <p style="color:#888;font-size:13px">Link expires in 24 hours. If you didn't sign up, ignore this email.</p>
-        </div>
-        """
-    )
     token = create_jwt(user_id)
-    safe = {k: v for k, v in user.items() if k not in ("hashed_password", "email_verification_token")}
+    safe = {k: v for k, v in user.items() if k != "hashed_password"}
     return {"token": token, "user": safe}
 
 @auth_router.post("/login")
@@ -1245,10 +1278,28 @@ async def login(req: LoginRequest):
 async def me(user = Depends(get_current_user)):
     year_month = datetime.now(timezone.utc).strftime("%Y-%m")
     usage = await db.usage.find_one({"user_id": user["id"], "year_month": year_month}) or {}
+    agreement = await db.beta_agreements.find_one({"user_id": user["id"]})
     safe = {k: v for k, v in user.items() if k != "hashed_password"}
     safe["usage"] = {k: usage.get(k, 0) for k in ("scripts", "videos", "posters")}
     safe["limits"] = FREE_TIER_LIMITS if safe.get("tier") == "free" else None
+    safe["has_agreed"] = bool(agreement)
     return safe
+
+
+@auth_router.post("/accept-agreement")
+async def accept_agreement(request: Request, user = Depends(get_current_user)):
+    """Record that the user accepted the beta testing agreement."""
+    existing = await db.beta_agreements.find_one({"user_id": user["id"]})
+    if not existing:
+        ip = request.client.host if request.client else "unknown"
+        ua = request.headers.get("user-agent", "")
+        await db.beta_agreements.insert_one({
+            "user_id": user["id"],
+            "agreed_at": datetime.now(timezone.utc).isoformat(),
+            "ip_address": ip,
+            "user_agent": ua,
+        })
+    return {"accepted": True}
 
 @auth_router.get("/verify-email")
 async def verify_email(token: str):
@@ -1411,6 +1462,93 @@ async def google_oauth_callback(code: str, state: str = "", request: Request = N
     return redirect
 
 
+# ── Admin Router ───────────────────────────────────────────────────────────────
+admin_router = APIRouter(prefix="/admin")
+
+def _require_admin(request: Request):
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+@admin_router.post("/approve-beta-user")
+async def approve_beta_user(req: ApproveBetaUserRequest, request: Request):
+    """
+    Admin endpoint: approve a beta waitlist user.
+    Creates a real account, sends login credentials by email.
+    Requires X-Admin-Secret header matching ADMIN_SECRET env var.
+    """
+    _require_admin(request)
+    email = req.email.lower().strip()
+
+    # Check they actually requested access
+    beta_entry = await db.beta_users.find_one({"email": email})
+    if not beta_entry:
+        raise HTTPException(status_code=404, detail="Email not found in beta waitlist")
+    if beta_entry.get("is_approved"):
+        raise HTTPException(status_code=400, detail="User is already approved")
+
+    # Check for duplicate real user
+    existing_user = await db.users.find_one({"email": email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User account already exists")
+
+    # Generate a temporary password
+    temp_password = secrets.token_urlsafe(12)
+    user_id = str(uuid.uuid4())
+    name = beta_entry.get("name") or email.split("@")[0]
+    user = {
+        "id": user_id,
+        "email": email,
+        "name": name,
+        "hashed_password": hash_password(temp_password),
+        "tier": "free",
+        "google_id": None,
+        "stripe_customer_id": None,
+        "email_verified": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one({**user, "_id": user_id})
+
+    # Mark beta_users entry as approved
+    await db.beta_users.update_one(
+        {"email": email},
+        {"$set": {"is_approved": True, "approved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Send welcome email with credentials
+    await send_email(
+        to_email=email,
+        to_name=name,
+        subject="Welcome to SwiftPack AI Beta — Your account is ready",
+        html=f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#6366f1">Welcome to SwiftPack AI Beta!</h2>
+          <p>Hi {name}, your beta access has been approved.</p>
+          <p>Sign in at <a href="{FRONTEND_URL}/login">{FRONTEND_URL}/login</a> with:</p>
+          <ul>
+            <li><strong>Email:</strong> {email}</li>
+            <li><strong>Temporary password:</strong> <code>{temp_password}</code></li>
+          </ul>
+          <p>Please change your password after your first login.</p>
+          <p style="color:#888;font-size:13px">
+            This is a beta version for testing purposes only. Features may change without notice.
+            NovaJay Tech (FM1032559).
+          </p>
+        </div>
+        """
+    )
+    logger.info("Beta user approved and account created: %s", email)
+    return {"message": f"Account created for {email}. Credentials sent by email."}
+
+
+@admin_router.get("/beta-waitlist")
+async def list_beta_waitlist(request: Request):
+    """List all beta waitlist entries. Requires X-Admin-Secret header."""
+    _require_admin(request)
+    entries = await db.beta_users.find({}, {"_id": 0}).to_list(500)
+    return {"count": len(entries), "entries": entries}
+
+
 # ── Billing Router ─────────────────────────────────────────────────────────────
 billing_router = APIRouter(prefix="/api/billing")
 
@@ -1474,6 +1612,7 @@ async def billing_portal(user = Depends(get_current_user)):
 
 app.include_router(api_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(billing_router)
 
 

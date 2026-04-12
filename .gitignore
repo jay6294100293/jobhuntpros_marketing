@@ -30,6 +30,10 @@ next-env.d.ts
 dist/
 dist
 
+# Secrets directory — NEVER commit this (lives outside the repo at E:\secrets\)
+E:/secrets/
+/secrets/
+
 # Environment files (comprehensive coverage)
 .env
 .env.*

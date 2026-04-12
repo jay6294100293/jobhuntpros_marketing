@@ -1,28 +1,26 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Mail, Lock, User, Chrome, Loader2, CheckCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Sparkles, Mail, User, Loader2, CheckCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '../../context/AuthContext';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
-  const { register, loginWithGoogle } = useAuth();
-  const navigate = useNavigate();
+  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !email || !password) { toast.error('Fill in all fields'); return; }
-    if (password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    if (!email) { toast.error('Please enter your email'); return; }
     setLoading(true);
     try {
-      await register(email, password, name);
-      setRegistered(true);
+      await axios.post(`${BACKEND_URL}/api/auth/request-beta-access`, { email, name });
+      setSubmitted(true);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Registration failed');
+      toast.error(err.response?.data?.detail || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -36,103 +34,83 @@ export const Register = () => {
             <Sparkles className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
-          <p className="text-zinc-400 mt-2">Create your free account</p>
+          <p className="text-zinc-400 mt-2">Private Beta</p>
         </div>
 
         <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-xl p-8 space-y-6">
-          {registered ? (
+          {submitted ? (
             <div className="text-center space-y-4">
               <CheckCircle className="w-16 h-16 mx-auto text-emerald-400" />
-              <h2 className="text-xl font-semibold">Account created!</h2>
+              <h2 className="text-xl font-semibold text-zinc-100">Request received!</h2>
               <p className="text-zinc-400 text-sm">
-                We sent a verification link to <span className="text-zinc-200">{email}</span>. Check your inbox to activate your account.
+                We'll notify <span className="text-zinc-200">{email}</span> when your account is ready.
               </p>
-              <button
-                onClick={() => navigate('/')}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors"
+              <Link
+                to="/login"
+                className="block w-full py-3 text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors text-sm"
               >
-                Go to Dashboard
-              </button>
+                Back to sign in
+              </Link>
             </div>
           ) : (
-          <>
-          <button
-            onClick={loginWithGoogle}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition-colors"
-          >
-            <Chrome className="w-5 h-5" />
-            Sign up with Google
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 border-t border-zinc-800" />
-            <span className="text-xs text-zinc-500">or</span>
-            <div className="flex-1 border-t border-zinc-800" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Name</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/60 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
+            <>
+              <div className="flex items-start gap-3 p-4 bg-indigo-950/40 border border-indigo-800/40 rounded-lg">
+                <Lock className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                <p className="text-sm text-zinc-300">
+                  SwiftPack AI is currently in <span className="text-indigo-400 font-medium">private beta</span>.
+                  Enter your email to request access. You will receive your login credentials by email once approved.
+                </p>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/60 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-1.5">Name <span className="text-zinc-600">(optional)</span></label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Your name"
+                      className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/60 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Min 8 characters"
-                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/60 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-1.5">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/60 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Create Free Account
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Request Beta Access
+                </button>
+              </form>
 
-          <div className="text-center space-y-2">
-            <p className="text-xs text-zinc-500">Free plan: 10 scripts · 5 videos · 10 posters/month</p>
-            <p className="text-center text-sm text-zinc-500">
-              Already have an account?{' '}
-              <Link to="/login" className="text-indigo-400 hover:text-indigo-300">Sign in</Link>
-            </p>
-          </div>
-          </>
+              <p className="text-center text-sm text-zinc-500">
+                Already have an account?{' '}
+                <Link to="/login" className="text-indigo-400 hover:text-indigo-300">Sign in</Link>
+              </p>
+            </>
           )}
         </div>
+
+        <p className="text-center text-xs text-zinc-600 mt-4">Beta Version — Not for commercial use</p>
       </div>
     </div>
   );

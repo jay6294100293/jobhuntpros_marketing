@@ -49,7 +49,6 @@ export const AuthProvider = ({ children }) => {
     }
     if (upgraded === 'true') {
       window.history.replaceState({}, '', window.location.pathname);
-      // Refresh user to get new tier
       if (token || oauthToken) {
         axios.get(`${BACKEND_URL}/api/auth/me`).then(res => setUser(res.data)).catch(() => {});
       }
@@ -86,8 +85,14 @@ export const AuthProvider = ({ children }) => {
     return res.data;
   };
 
+  const acceptAgreement = async () => {
+    await axios.post(`${BACKEND_URL}/api/auth/accept-agreement`);
+    // Update local user state so has_agreed reflects immediately
+    setUser(prev => prev ? { ...prev, has_agreed: true } : prev);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, logout, loginWithGoogle, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, register, login, logout, loginWithGoogle, refreshUser, acceptAgreement }}>
       {children}
     </AuthContext.Provider>
   );

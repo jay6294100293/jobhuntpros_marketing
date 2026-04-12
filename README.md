@@ -147,38 +147,81 @@ Production hosting (AWS/GCP/DigitalOcean): $20–55/month depending on provider.
 
 ---
 
-## Docker Deployment
+## Local Development
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  mongodb:
-    image: mongo:5.0
-    ports: ["27017:27017"]
-    volumes: [mongo-data:/data/db]
+**Secrets** live outside the repo in `E:\secrets\swiftpack.env` (Windows) — copy `.env.example` to that path and fill in real values.
 
-  backend:
-    build: ./backend
-    ports: ["8001:8001"]
-    environment:
-      - MONGO_URL=mongodb://mongodb:27017
-      - DB_NAME=jobhuntpro_db
-    depends_on: [mongodb]
-
-  frontend:
-    build: ./frontend
-    ports: ["3000:3000"]
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8001
-    depends_on: [backend]
-
-volumes:
-  mongo-data:
-```
+The `docker-compose.yml` reads secrets from whatever path `ENV_FILE` is set to, defaulting to `./backend/.env` for simple local runs:
 
 ```bash
+# Option A — use default fallback (backend/.env)
 docker-compose up -d
+
+# Option B — point at the external secrets file explicitly
+ENV_FILE=E:/secrets/swiftpack.env docker-compose up -d
+
+# Option C — run backend directly (no Docker)
+cd backend
+uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+---
+
+## Deployment
+
+### GitHub Secrets required
+
+Before the CI/CD pipeline can deploy, add these secrets under  
+**GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `SSH_PRIVATE_KEY` | Private SSH key (whose public key is in `~/.ssh/authorized_keys` on the server) |
+| `SERVER_HOST` | EC2 public IP address (e.g. `54.123.45.67`) |
+| `SERVER_USER` | `ubuntu` |
+
+### Fresh server setup
+
+Run once on a new EC2 instance:
+
+```bash
+# Copy the script to the server then run it
+scp scripts/server-setup.sh ubuntu@YOUR_SERVER_IP:~/
+ssh ubuntu@YOUR_SERVER_IP "bash ~/server-setup.sh"
+```
+
+What it does: installs Docker + Docker Compose + git, creates `/home/ubuntu/secrets/` (mode 700), clones the repo into `/home/ubuntu/swiftpack/`, configures the firewall (80/443/SSH), installs Certbot.
+
+### Add secrets to the server manually
+
+```bash
+ssh ubuntu@YOUR_SERVER_IP
+nano /home/ubuntu/secrets/swiftpack.env   # fill in all REPLACE_WITH_... values
+```
+
+### SSL certificate
+
+```bash
+ssh ubuntu@YOUR_SERVER_IP
+sudo certbot certonly --standalone -d swiftpackai.tech -d www.swiftpackai.tech
+```
+
+### What happens on every push to main
+
+1. GitHub Actions runs `pytest` against `backend/requirements.txt` (skips gracefully if no test files exist)
+2. If tests pass, it SSHes into the server and runs:
+   ```bash
+   git pull origin main
+   docker-compose -f docker-compose.prod.yml down
+   docker-compose -f docker-compose.prod.yml up -d --build
+   docker system prune -f
+   ```
+3. Logs `SwiftPack AI deployed successfully`
+
+### Manual deploy (emergency)
+
+```bash
+bash scripts/deploy.sh ubuntu@YOUR_SERVER_IP
 ```
 
 ---

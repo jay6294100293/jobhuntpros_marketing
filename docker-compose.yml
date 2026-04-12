@@ -15,10 +15,10 @@ services:
     ports:
       - "8001:8001"
     env_file:
-      - ./backend/.env
+      - ${ENV_FILE:-./backend/.env}
     environment:
       - MONGO_URL=mongodb://mongo:27017
-      - DB_NAME=jobhuntpro
+      - DB_NAME=swiftpackai_db
     depends_on:
       - mongo
     volumes:

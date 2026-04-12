@@ -104,9 +104,22 @@ export const Layout = ({ children }) => {
         </div>
       </nav>
 
+      {/* Beta banner — shown to all authenticated users */}
+      {user && (
+        <div className="relative z-20 bg-amber-950/60 border-b border-amber-800/40 px-4 py-2 text-center">
+          <p className="text-xs text-amber-300">
+            <span className="font-semibold">SwiftPack AI Beta</span> — This software is provided for testing purposes only. Features may change without notice.
+          </p>
+        </div>
+      )}
+
       <main className="relative z-10">
         {children}
       </main>
+
+      <footer className="relative z-10 border-t border-zinc-800/50 py-3 text-center">
+        <p className="text-xs text-zinc-600">Beta Version — Not for commercial use · NovaJay Tech (FM1032559)</p>
+      </footer>
     </div>
   );
 };
