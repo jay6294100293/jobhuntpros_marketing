@@ -95,8 +95,10 @@ export const Login = () => {
           </form>
 
           <p className="text-center text-sm text-zinc-500">
-            Don&apos;t have an account?{' '}
-            <Link to="/register" className="text-indigo-400 hover:text-indigo-300">Create one free</Link>
+            SwiftPack AI is invite-only.{' '}
+            <a href="mailto:admin@novajaytech.com" className="text-indigo-400 hover:text-indigo-300">
+              Request access
+            </a>
           </p>
         </div>
       </div>
