@@ -591,26 +591,30 @@ def _build_slideshow_ffmpeg(
 
 
 async def generate_tts_audio(text: str, output_path: str) -> bool:
+    # Primary: Edge TTS — Microsoft Neural voices, free, no API key, human-quality
+    try:
+        import edge_tts
+        # Andrew = warm male narrator; alternatives: JennyNeural, GuyNeural, AriaNeural
+        communicate = edge_tts.Communicate(text, voice="en-US-AndrewNeural", rate="+5%")
+        await communicate.save(output_path)
+        if Path(output_path).exists() and Path(output_path).stat().st_size > 1000:
+            logger.info("Edge TTS succeeded")
+            return True
+    except Exception as e:
+        logger.warning(f"Edge TTS failed: {e}, falling back to gTTS")
+
+    # Fallback: gTTS
     try:
         from gtts import gTTS
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, lambda: gTTS(text=text, lang='en', slow=False).save(output_path))
-        return True
+        if Path(output_path).exists() and Path(output_path).stat().st_size > 1000:
+            logger.info("gTTS fallback succeeded")
+            return True
     except Exception as e:
-        logger.warning(f"gTTS failed: {e}, trying pyttsx3")
-    try:
-        import pyttsx3
-        def _run():
-            engine = pyttsx3.init()
-            engine.setProperty('rate', 170)
-            engine.save_to_file(text, output_path)
-            engine.runAndWait()
-            engine.stop()
-        await asyncio.get_event_loop().run_in_executor(None, _run)
-        return True
-    except Exception as e:
-        logger.warning(f"pyttsx3 failed: {e}. No audio.")
-        return False
+        logger.warning(f"gTTS failed: {e}. No audio.")
+
+    return False
 
 
 def _to_ffmpeg_color(h: str) -> str:

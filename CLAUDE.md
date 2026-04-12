@@ -39,8 +39,8 @@ Then reference skills automatically when writing landing page copy, email sequen
 
 ## STEP 2 — READ THESE FILES FIRST
 
-1. `docs/PROJECT_SUMMARY.md` ← complete feature list, tech stack, cost breakdown
-2. `README.md` ← architecture, API reference, quick start
+1. `docs/PROJECT_SUMMARY.md` ← current state, tech stack, deploy commands
+2. `docs/PRODUCT_STRATEGY.md` ← business model, pricing, roadmap (READ THIS)
 3. `docs/VIDEO_FEATURES.md` ← video generation spec (read before any video work)
 4. `docs/SETUP_INSTRUCTIONS.md` ← deployment guide
 
@@ -51,16 +51,19 @@ Then reference skills automatically when writing landing page copy, email sequen
 ```
 Backend     → FastAPI 0.110.1 (Python 3.11) — server.py is the entire backend
 Frontend    → React 19 + Tailwind CSS 3.4 + Shadcn/UI + React Router DOM 7.5.1
-Database    → MongoDB (Motor async driver)
-AI / LLM    → Google Gemini 2.5 Flash (primary) — 1,000 req/day free, paid plan available
-TTS         → Google Cloud TTS Neural2 (4M chars/month free)
-Video       → MoviePy 2.2.1 + FFmpeg + Pillow 11.3.0
-Scraping    → BeautifulSoup4 + Requests (user-provided URLs only — legal)
+Database    → MongoDB (Motor async driver) — resilient, works without it
+AI / LLM    → Google Gemini 2.5 Flash (google-genai SDK — NOT google-generativeai)
+TTS         → gTTS (current) → Edge TTS planned (free, neural voices, no key)
+Video       → FFmpeg + Pillow (CPU only — no GPU on EC2)
+Scraping    → BeautifulSoup4 + httpx (verify=False for SSL compat)
+Auth        → JWT (jose) + bcrypt + beta agreement modal
+Payments    → Stripe (in code, not yet active)
 Ports       → Backend: 8001, Frontend: 3000
-Process     → Supervisor (manages both processes)
-Proxy       → Nginx (reverse proxy)
-Deployment  → Docker Compose
+Proxy       → Nginx (SSL + reverse proxy, Let's Encrypt cert)
+Deployment  → Docker Compose (4 containers: mongo, backend, frontend, nginx)
 Domain      → swiftpackai.tech
+Server      → AWS EC2 ubuntu@99.79.39.115, repo at /home/ubuntu/swiftpack
+SSH key     → novajaytechserver_testing-key.pem (in ~/Downloads)
 Company     → NovaJay Tech (novajaytech.com)
 ```
 
@@ -96,65 +99,88 @@ Magic Button response: 2 videos + 2 scripts + 2 posters
 - Scrape any URL the user didn't provide — only process URLs users paste themselves
 - Store any scraped data permanently — process and return, no persistent scraping DB
 - Break the Magic Button pipeline — it is the core product feature
-- Use a video generation model that requires GPU not available (GTX 1080 Ti is Mother's — do not use it)
+- Use the GTX 1080 Ti for SwiftPack — it runs Mother AI, taking it down kills production
 - Hardcode API keys — always read from environment variables
 - Use synchronous operations for video generation — all heavy ops must be async
-- Block the FastAPI event loop with MoviePy — run in `asyncio.run_in_executor`
+- Block the FastAPI event loop — run heavy work in `asyncio.run_in_executor`
+- Install Playwright/Chromium on EC2 — t3.micro has 1GB RAM, it will OOM
+- Launch talking head feature without ID verification + DeepFace check (deepfake risk)
 
 ### ALWAYS DO THESE
 - Run video generation in executor (not blocking the event loop)
 - Save generated files to `backend/outputs/` directory
-- Clean up temp audio files after video generation completes
-- Return progress updates for long operations (video gen can take 15-30 seconds)
+- Clean up temp dirs (shutil.rmtree) after video generation completes
+- Strip shell-unsafe chars from caption text (backticks, $, [], *, #, ', ")
+- Use audio map index = n (number of images) not hardcoded 1 in slideshow FFmpeg
 - Validate all user inputs before passing to Gemini
-- Use `httpx` for async HTTP (not `requests` in async contexts)
-- Check available disk space before starting video generation
+- Use `httpx` with verify=False for async HTTP scraping
+- Check syntax (ast.parse) before deploying backend changes
+- Test with Playwright E2E (test_e2e.js) before declaring done
 
 ---
 
 ## STEP 6 — CURRENT PRIORITIES
 
-### Status: Code Complete — Needs Production Deployment
+### Status: Live in production. Quality upgrade phase.
 
-The code is fully built. Current priority is deployment and enhancement:
+Full strategy in `docs/PRODUCT_STRATEGY.md`. Implementation order:
 
-### Priority 1 — Production Deployment
-1. Set real `GEMINI_API_KEY` in `backend/.env` (paid plan key)
-2. Set up Google Cloud TTS credentials (`gcloud-tts-key.json`)
-3. Configure MongoDB connection string
-4. Set `CORS_ORIGINS` to production domain
-5. Run `docker-compose up -d`
-6. Configure Nginx SSL with Let's Encrypt
-7. Test Magic Button end-to-end in production
-
-### Priority 2 — AI Fallback (add resilience)
-Add fallback chain to script generation (currently single-point failure on Gemini):
-- Primary: Gemini 2.5 Flash (paid plan — high rate limit)
-- Fallback: OpenRouter (if Gemini fails)
-- Emergency: Template-based script (no AI — always works)
-Implement in `backend/server.py` — wrap Gemini call with try/except + fallback
-
-### Priority 3 — URL Scraper Reliability (Crawlee upgrade)
-Current: `requests + BeautifulSoup` — fails on JS-heavy sites
-Upgrade: `crawlee[beautifulsoup]` — stealth crawling, anti-bot fingerprinting
-```bash
-pip install crawlee[beautifulsoup]
+### Priority 1 — Edge TTS (DO THIS FIRST)
+Replace gTTS with edge-tts (Microsoft Neural voices, free, no API key).
+Biggest single quality improvement. 2 hours of work.
+```python
+import edge_tts
+communicate = edge_tts.Communicate(text, voice="en-US-AndrewNeural")
+await communicate.save(output_path)
 ```
-Rewrite the `/api/scrape` endpoint to use Crawlee's `BeautifulSoupCrawler`
-Only applies to user-provided URLs — still fully legal
+Install: `pip install edge-tts` (add to requirements.txt)
+The voice sounds like a real human presenter. gTTS sounds like 2003.
 
-### Priority 4 — LTX-Video Integration (FUTURE — needs 2nd GPU)
-When second GPU is added to home server:
-- Integrate LTX-Video (Lightricks, Apache 2.0) for actual AI video generation
-- Replaces MoviePy slideshow approach with real generative video
-- 4K output, synchronized audio, up to 20 seconds per clip
-- GTX 1080 Ti stays on Mother — second GPU handles LTX inference
+### Priority 2 — Pillow Slide Design System
+Replace single-caption gradient with 6 structured slide templates:
+- Slide 1: Hero (product name + headline, strong contrast)
+- Slide 2: Problem (pain point, emotional)
+- Slide 3: Solution (product name + value prop)
+- Slide 4: Features (3 checkmarks from scraped data)
+- Slide 5: How it works (numbered steps)
+- Slide 6: CTA (URL, urgency)
+Each slide: proper typography hierarchy, brand colors, decorative elements.
 
-### Priority 5 — Landing Page
-Build public marketing page using marketingskills:
-- Load `page-cro` + `copywriting` + `signup-flow-cro` skills
-- Headline: URL → complete launch pack in 30 seconds, free
-- Show before/after: traditional process ($400-1900, 5-10 days) vs Studio (30 seconds, $0)
+### Priority 3 — Crossfade Transitions
+FFmpeg xfade filter between slides. Makes video feel polished.
+Replace hard-cut concat with xfade=transition=fade:duration=0.5
+
+### Priority 4 — Watermark in Slide Design
+Burn "SwiftPack AI" into slide template content area (not corner).
+Integrated into design — cropping destroys content, not just watermark.
+Corner watermarks are useless (users crop in 5 seconds).
+
+### Priority 5 — Stripe Subscription Enforcement
+- Free: 3 lifetime generations (not per month)
+- Starter $19/mo: 15 gens
+- Pro $49/mo: 50 gens + talking head
+- Agency $149/mo: 200 gens + team + white label
+Stripe is already in the codebase — just needs activation + limit logic.
+
+### Priority 6 — Modal + LTX-Video (Pro Tier GPU)
+Deploy LTX-Video (Apache 2.0) on Modal.com as serverless GPU function.
+Route pro users to Modal. Free users keep FFmpeg slideshow.
+Cost: ~$0.44/video on A100. True pay-per-second, $0 when idle.
+
+### Priority 7 — SadTalker Talking Head (Pro Feature)
+User uploads portrait photo → lip-synced talking head video.
+MUST have before launch:
+  - Stripe Identity ID verification ($1.50/user)
+  - DeepFace check against known public figures
+  - "AI GENERATED" label burned into all talking head videos
+  - Explicit consent checkbox (timestamped in DB)
+  - EU AI Act compliance
+
+### Priority 8 — AppSumo Lifetime Deal
+Only after Priority 1-5 complete (product must look good before LTD).
+LTD Tier 1: $79 / 15 gens per month forever
+LTD Tier 2: $149 / 50 gens per month forever
+Cap: 500 codes total. AppSumo takes 30%, you keep 70%.
 
 ---
 
