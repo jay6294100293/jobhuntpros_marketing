@@ -111,6 +111,12 @@ FREE_TIER_LIMITS = {"scripts": 5, "videos": 3, "posters": 5}
 STRIPE_STARTER_PRICE_ID = os.getenv('STRIPE_STARTER_PRICE_ID', '')
 STRIPE_AGENCY_PRICE_ID = os.getenv('STRIPE_AGENCY_PRICE_ID', '')
 
+# Modal.com GPU integration (Pro/Agency tier)
+MODAL_TOKEN_ID = os.getenv('MODAL_TOKEN_ID', '')
+MODAL_TOKEN_SECRET = os.getenv('MODAL_TOKEN_SECRET', '')
+MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'swiftpack-ltx-video')
+MODAL_ENABLED = bool(MODAL_TOKEN_ID and MODAL_TOKEN_SECRET)
+
 # ── MongoDB ────────────────────────────────────────────────────────────────────
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -1070,6 +1076,106 @@ def _make_design_slides(
     return slides
 
 
+async def _generate_modal_clip(
+    prompt: str,
+    aspect_ratio: str,
+    num_frames: int = 97,
+) -> Optional[bytes]:
+    """
+    Call Modal LTX-Video serverless GPU to generate a short AI video clip.
+    Returns raw MP4 bytes, or None if Modal is not configured / call fails.
+    This is a best-effort enhancement — callers must always handle None.
+    """
+    if not MODAL_ENABLED:
+        return None
+    try:
+        import modal as _modal
+        loop = asyncio.get_event_loop()
+        generator = _modal.Function.lookup(MODAL_APP_NAME, "LTXVideoGenerator.generate")
+        video_bytes: bytes = await loop.run_in_executor(
+            None,
+            lambda: generator.remote(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                num_frames=num_frames,
+            )
+        )
+        if video_bytes and len(video_bytes) > 10_000:
+            logger.info(f"Modal LTX-Video generated {len(video_bytes)//1024} KB clip")
+            return video_bytes
+        return None
+    except Exception as e:
+        logger.warning(f"Modal LTX-Video skipped: {e}")
+        return None
+
+
+def _ffmpeg_loop_clip_with_audio(
+    clip_path: str,
+    sentences: List[str],
+    color1: str,
+    width: int,
+    height: int,
+    total_duration: float,
+    audio_path: Optional[str],
+    output_path: str,
+) -> str:
+    """
+    Take a short AI video clip, loop it to cover total_duration,
+    then overlay captions and the branded progress bar.
+    Used for Pro tier Modal-generated clips.
+    """
+    c1 = _to_ffmpeg_color(color1)
+    fs = max(28, width // 28)
+    dur_per_cap = total_duration / max(len(sentences), 1)
+
+    def _clean(s: str) -> str:
+        return (s.replace("'", "").replace("`", "").replace("$", "")
+                 .replace(":", " ").replace("\\", "").replace('"', "")
+                 .replace("\n", " ").replace("[", "").replace("]", "")
+                 .replace("*", "").replace("#", ""))[:70]
+
+    # Loop the clip with -stream_loop -1, scale to target resolution
+    inputs = f"-stream_loop -1 -i \"{clip_path}\""
+
+    # Scale + crop to exact canvas, then add captions and progress bar
+    scale_filter = (
+        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},fps=25,format=yuv420p[vbase]"
+    )
+
+    drawtext_parts = []
+    for i, s in enumerate(sentences):
+        t_start = i * dur_per_cap
+        t_end = (i + 1) * dur_per_cap
+        txt = _clean(s)
+        drawtext_parts.append(
+            f"drawtext=text='{txt}':"
+            f"fontsize={fs}:fontcolor=white:borderw=2:bordercolor=black:"
+            f"box=1:boxcolor=black@0.55:boxborderw=12:"
+            f"x=(w-text_w)/2:y=h*0.82:"
+            f"enable='between(t,{t_start:.3f},{t_end:.3f})'"
+        )
+    drawtext_parts.append(
+        f"drawbox=x=0:y=h-8:w='iw*t/{total_duration:.3f}':h=8:color={c1}@1.0:t=fill"
+    )
+
+    caption_filter = ",".join(drawtext_parts)
+    filter_complex = f"{scale_filter};[vbase]{caption_filter}[vout]"
+
+    audio_part = (
+        f" -i \"{audio_path}\" -map \"[vout]\" -map 1:a -c:a aac -shortest"
+        if audio_path else " -map \"[vout]\""
+    )
+
+    return (
+        f"\"{FFMPEG_BIN}\"{inputs}"
+        f" -filter_complex \"{filter_complex}\""
+        f"{audio_part}"
+        f" -t {total_duration:.3f} -threads 2 -c:v libx264 -preset ultrafast"
+        f" -crf 22 -pix_fmt yuv420p -y \"{output_path}\""
+    )
+
+
 def _build_slideshow_ffmpeg(
     image_paths: List[str], sentences: List[str],
     color1: str, width: int, height: int,
@@ -1673,26 +1779,70 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     local_images = combined
     total_duration = len(local_images) * 3.0  # 3s per slide
 
-    cmd = _build_slideshow_ffmpeg(
-        local_images, sentences, color1, width, height,
-        total_duration, audio_path, output_path
-    )
+    # ── Pro/Agency: try Modal LTX-Video GPU ──────────────────────────────────
+    # Build a rich visual prompt from the product name + script
+    modal_used = False
+    if user_tier in ("pro", "agency") and MODAL_ENABLED:
+        product_ctx = request.product_name or ""
+        prompt_for_modal = (
+            f"Professional marketing video for {product_ctx}. "
+            f"{sentences[0] if sentences else ''} "
+            "Sleek modern aesthetic, smooth cinematic motion, vibrant brand colors, "
+            "high production quality, no text, no watermarks."
+        )[:500]
+        logger.info(f"Attempting Modal LTX-Video for {user_tier} user …")
+        clip_bytes = await _generate_modal_clip(
+            prompt=prompt_for_modal,
+            aspect_ratio=request.format,
+            num_frames=97,  # ~4s clip that will be looped to full duration
+        )
+        if clip_bytes:
+            # Save clip to temp file, then loop+overlay with FFmpeg
+            modal_clip_path = str(tmp_dir / "modal_clip.mp4")
+            with open(modal_clip_path, "wb") as f:
+                f.write(clip_bytes)
 
-    logger.info(f"Running FFmpeg slideshow command ({len(local_images)} images): {cmd[:200]}...")
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
-    )
+            cmd = _ffmpeg_loop_clip_with_audio(
+                clip_path=modal_clip_path,
+                sentences=sentences,
+                color1=color1,
+                width=width, height=height,
+                total_duration=total_duration,
+                audio_path=audio_path,
+                output_path=output_path,
+            )
+            logger.info("Running FFmpeg loop+overlay on Modal clip …")
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=180)
+            )
+            if result.returncode == 0 and Path(output_path).exists():
+                modal_used = True
+                logger.info("Modal LTX-Video pipeline completed successfully.")
+            else:
+                logger.warning(f"FFmpeg loop failed (falling back to slideshow): {result.stderr[-300:]}")
 
-    if result.returncode != 0:
-        logger.error(f"FFmpeg stderr: {result.stderr[-800:]}")
-        raise HTTPException(status_code=500, detail=f"Video rendering failed: {result.stderr[-300:]}")
+    # ── Slideshow fallback (free/starter or Modal unavailable/failed) ─────────
+    if not modal_used:
+        cmd = _build_slideshow_ffmpeg(
+            local_images, sentences, color1, width, height,
+            total_duration, audio_path, output_path
+        )
+        logger.info(f"Running FFmpeg slideshow ({len(local_images)} slides) …")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+        )
+        if result.returncode != 0:
+            logger.error(f"FFmpeg stderr: {result.stderr[-800:]}")
+            raise HTTPException(status_code=500, detail=f"Video rendering failed: {result.stderr[-300:]}")
 
     if not Path(output_path).exists():
         raise HTTPException(status_code=500, detail="FFmpeg exited 0 but output file missing")
 
-    # Clean up temp image dir
+    # Clean up temp dir
     import shutil
     try:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -1705,6 +1855,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
         "format": request.format,
         "duration": total_duration,
         "has_audio": audio_path is not None,
+        "engine": "ltx-video" if modal_used else "slideshow",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "type": "video"
     }
