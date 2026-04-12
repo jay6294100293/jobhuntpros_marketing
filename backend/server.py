@@ -98,7 +98,18 @@ BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'SwiftPack AI')
 
 ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 
-FREE_TIER_LIMITS = {"scripts": 10, "videos": 5, "posters": 10}
+# Tier limits — "lifetime": True means total-ever, False means per-calendar-month
+TIER_CONFIG = {
+    "free":    {"videos": 3,   "scripts": 5,   "posters": 5,   "lifetime": True,  "formats": ["9:16"]},
+    "starter": {"videos": 15,  "scripts": 50,  "posters": 50,  "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
+    "pro":     {"videos": 50,  "scripts": 200, "posters": 200, "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
+    "agency":  {"videos": 200, "scripts": 999, "posters": 999, "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
+}
+# Keep for backward compat (used in /me endpoint)
+FREE_TIER_LIMITS = {"scripts": 5, "videos": 3, "posters": 5}
+
+STRIPE_STARTER_PRICE_ID = os.getenv('STRIPE_STARTER_PRICE_ID', '')
+STRIPE_AGENCY_PRICE_ID = os.getenv('STRIPE_AGENCY_PRICE_ID', '')
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
 mongo_url = os.environ['MONGO_URL']
@@ -164,16 +175,52 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Security
     return await db.users.find_one({"id": user_id}, {"_id": 0})
 
 async def check_usage_limit(user: dict, content_type: str):
-    if not user or user.get("tier") == "pro":
-        return
-    year_month = datetime.now(timezone.utc).strftime("%Y-%m")
-    usage = await db.usage.find_one({"user_id": user["id"], "year_month": year_month}) or {}
-    current = usage.get(content_type, 0)
-    limit = FREE_TIER_LIMITS.get(content_type, 999)
+    """Enforce per-tier generation limits. Free = 3 lifetime videos. Paid = monthly."""
+    if not user:
+        return  # unauthenticated requests pass through (rate limiter handles abuse)
+    tier = user.get("tier", "free")
+    cfg = TIER_CONFIG.get(tier, TIER_CONFIG["free"])
+    limit = cfg.get(content_type, 999)
+
+    if cfg["lifetime"]:
+        # Sum ALL usage records for this user across all months
+        pipeline = [
+            {"$match": {"user_id": user["id"]}},
+            {"$group": {"_id": None, "total": {"$sum": f"${content_type}"}}}
+        ]
+        result = await db.usage.aggregate(pipeline).to_list(1)
+        current = result[0]["total"] if result else 0
+        scope = "lifetime"
+    else:
+        year_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        usage = await db.usage.find_one({"user_id": user["id"], "year_month": year_month}) or {}
+        current = usage.get(content_type, 0)
+        scope = "this month"
+
     if current >= limit:
+        upgrade_msg = {
+            "free":    "Upgrade to Starter ($19/mo) for 15/month with no watermark.",
+            "starter": "Upgrade to Pro ($49/mo) for 50/month.",
+            "pro":     "Upgrade to Agency ($149/mo) for 200/month.",
+            "agency":  "Contact us about enterprise plans.",
+        }.get(tier, "Upgrade your plan for more.")
         raise HTTPException(
             status_code=429,
-            detail=f"Free tier limit: {limit} {content_type}/month. Upgrade to Pro for unlimited."
+            detail=f"Limit reached: {current}/{limit} {content_type} used {scope}. {upgrade_msg}"
+        )
+
+
+async def check_format_allowed(user: dict, fmt: str):
+    """Free tier is restricted to 9:16 (TikTok/Reels). Paid tiers get all formats."""
+    if not user:
+        return  # unauthenticated — no restriction (watermark enforces quality gate)
+    tier = user.get("tier", "free")
+    cfg = TIER_CONFIG.get(tier, TIER_CONFIG["free"])
+    allowed = cfg.get("formats", ["9:16", "16:9", "1:1"])
+    if fmt not in allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Format '{fmt}' is not available on the {tier} plan. Upgrade to Starter or higher for all formats."
         )
 
 async def increment_usage(user_id: str, content_type: str):
@@ -908,6 +955,58 @@ def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path)
     img.save(dest_path, 'JPEG', quality=92)
 
 
+def _apply_watermark(image_path: str, text: str = "SwiftPack AI"):
+    """
+    Burn a diagonal watermark into the CENTER of the slide image.
+    The text is large, semi-transparent, and rotated 30° so it covers the
+    content area — cropping corners does not remove it.
+    """
+    img = Image.open(image_path).convert("RGBA")
+    w, h = img.size
+
+    # Create transparent overlay same size as image
+    overlay = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # Choose font size relative to slide width
+    font_size = max(48, w // 9)
+    font = _get_font(font_size)
+
+    # Measure text
+    tmp_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    try:
+        bbox = tmp_draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+    except Exception:
+        tw = len(text) * font_size // 2
+        th = font_size
+
+    # Draw text on a separate surface (so we can rotate cleanly)
+    txt_surface = Image.new("RGBA", (tw + 40, th + 20), (255, 255, 255, 0))
+    txt_draw = ImageDraw.Draw(txt_surface)
+    # White text at ~30% opacity
+    txt_draw.text((20, 10), text, font=font, fill=(255, 255, 255, 76))
+
+    # Rotate 30° (diagonal but readable)
+    rotated = txt_surface.rotate(30, expand=True)
+
+    # Stamp it centered — repeat twice (offset) to cover more of the image
+    rw, rh = rotated.size
+    cx = (w - rw) // 2
+    cy = (h - rh) // 2
+
+    # Three copies: center, upper-center, lower-center
+    for dy in [-h // 4, 0, h // 4]:
+        paste_y = cy + dy
+        paste_x = cx + (dy // 6)  # slight horizontal shift for visual variety
+        overlay.paste(rotated, (paste_x, paste_y), rotated)
+
+    # Composite overlay onto original image
+    watermarked = Image.alpha_composite(img, overlay).convert("RGB")
+    watermarked.save(image_path, "JPEG", quality=92)
+
+
 def _make_design_slides(
     width: int, height: int,
     color1: str, color2: str,
@@ -915,12 +1014,14 @@ def _make_design_slides(
     features: List[str],
     sentences: List[str],
     url: str,
-    dest_dir: Path
+    dest_dir: Path,
+    watermark: bool = False
 ) -> List[str]:
     """
     Generate 6 structured marketing slide templates using Pillow.
     Returns list of file paths in slide order.
     Templates: Hero, Problem, Solution, Features, How It Works, CTA
+    If watermark=True, burns 'SwiftPack AI' diagonally into each slide's content area.
     """
     slides = []
 
@@ -957,6 +1058,14 @@ def _make_design_slides(
     p = str(dest_dir / "slide_cta.jpg")
     _make_slide_cta(width, height, color1, color2, product_name, url, p)
     slides.append(p)
+
+    # Apply watermark to all design slides if requested (free tier only)
+    if watermark:
+        for slide_path in slides:
+            try:
+                _apply_watermark(slide_path)
+            except Exception as e:
+                logger.warning(f"Watermark failed for {slide_path}: {e}")
 
     return slides
 
@@ -1470,8 +1579,8 @@ async def generate_voiceover(request: VoiceoverRequest):
 @api_router.post("/create-complete-video")
 async def create_complete_video(request: CompleteVideoRequest, user = Depends(get_optional_user)):
     """Create a complete professional video with voiceover, captions, and progress bar"""
-    if user:
-        await check_usage_limit(user, "videos")
+    await check_usage_limit(user, "videos")
+    await check_format_allowed(user, request.format)
     video_id = str(uuid.uuid4())
     format_map = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080)}
     width, height = format_map.get(request.format, (1080, 1080))
@@ -1511,6 +1620,11 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
             if ok is True and Path(dest).exists():
                 local_images.append(dest)
 
+    # Watermark: free (unauthenticated) users or free-tier users get it burned in.
+    # Paid tiers (starter, pro, agency) get clean slides.
+    user_tier = user.get("tier", "free") if user else "free"
+    apply_watermark = user_tier not in ("starter", "pro", "agency")
+
     # If we have fewer real images than needed, generate branded design slides to fill gaps.
     # Strategy: always generate the full 6-slide design set as fallback candidates,
     # then interleave real images where we have them.
@@ -1523,7 +1637,8 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
             features=request.features or [],
             sentences=sentences,
             url="",
-            dest_dir=tmp_dir
+            dest_dir=tmp_dir,
+            watermark=apply_watermark
         )
     )
 
@@ -2001,12 +2116,40 @@ async def login(req: LoginRequest):
 
 @auth_router.get("/me")
 async def me(user = Depends(get_current_user)):
-    year_month = datetime.now(timezone.utc).strftime("%Y-%m")
-    usage = await db.usage.find_one({"user_id": user["id"], "year_month": year_month}) or {}
+    tier = user.get("tier", "free")
+    cfg = TIER_CONFIG.get(tier, TIER_CONFIG["free"])
     agreement = await db.beta_agreements.find_one({"user_id": user["id"]})
+
+    if cfg["lifetime"]:
+        # Aggregate lifetime totals across all months
+        pipeline = [
+            {"$match": {"user_id": user["id"]}},
+            {"$group": {"_id": None,
+                        "videos": {"$sum": "$videos"},
+                        "scripts": {"$sum": "$scripts"},
+                        "posters": {"$sum": "$posters"}}}
+        ]
+        result = await db.usage.aggregate(pipeline).to_list(1)
+        usage_totals = result[0] if result else {}
+    else:
+        year_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        usage_totals = await db.usage.find_one({"user_id": user["id"], "year_month": year_month}) or {}
+
+    usage = {k: usage_totals.get(k, 0) for k in ("scripts", "videos", "posters")}
+    limits = {k: cfg.get(k) for k in ("videos", "scripts", "posters")}
+    remaining = {k: max(0, limits[k] - usage[k]) for k in limits}
+
     safe = {k: v for k, v in user.items() if k != "hashed_password"}
-    safe["usage"] = {k: usage.get(k, 0) for k in ("scripts", "videos", "posters")}
-    safe["limits"] = FREE_TIER_LIMITS if safe.get("tier") == "free" else None
+    safe["usage"] = usage
+    safe["limits"] = limits
+    safe["remaining"] = remaining
+    safe["plan"] = {
+        "tier": tier,
+        "lifetime": cfg["lifetime"],
+        "formats": cfg["formats"],
+        "label": {"free": "Free", "starter": "Starter ($19/mo)", "pro": "Pro ($49/mo)", "agency": "Agency ($149/mo)"}.get(tier, tier.title()),
+        "watermark": tier == "free",
+    }
     safe["has_agreed"] = bool(agreement)
     return safe
 
@@ -2277,24 +2420,58 @@ async def list_beta_waitlist(request: Request):
 # ── Billing Router ─────────────────────────────────────────────────────────────
 billing_router = APIRouter(prefix="/api/billing")
 
-@billing_router.post("/checkout")
-async def create_checkout_session(user = Depends(get_current_user)):
+
+def _price_id_to_tier() -> dict:
+    """Build price-ID → tier-name mapping from env vars."""
+    m = {}
+    if STRIPE_STARTER_PRICE_ID:
+        m[STRIPE_STARTER_PRICE_ID] = "starter"
+    if STRIPE_PRO_PRICE_ID:
+        m[STRIPE_PRO_PRICE_ID] = "pro"
+    if STRIPE_AGENCY_PRICE_ID:
+        m[STRIPE_AGENCY_PRICE_ID] = "agency"
+    return m
+
+
+async def _create_stripe_checkout(user: dict, price_id: str, target_tier: str) -> dict:
     if not stripe_lib or not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Stripe not configured. Set STRIPE_SECRET_KEY in backend/.env")
-    if user.get("tier") == "pro":
-        raise HTTPException(status_code=400, detail="Already on Pro tier")
-    if not STRIPE_PRO_PRICE_ID:
-        raise HTTPException(status_code=503, detail="STRIPE_PRO_PRICE_ID not set in backend/.env")
+        raise HTTPException(status_code=503, detail="Stripe not configured. Contact support.")
+    if not price_id:
+        raise HTTPException(status_code=503, detail=f"{target_tier.title()} price ID not configured yet.")
+    if user.get("tier") == target_tier:
+        raise HTTPException(status_code=400, detail=f"Already on the {target_tier} plan.")
     session = stripe_lib.checkout.Session.create(
         customer_email=user["email"],
         payment_method_types=["card"],
-        line_items=[{"price": STRIPE_PRO_PRICE_ID, "quantity": 1}],
+        line_items=[{"price": price_id, "quantity": 1}],
         mode="subscription",
         success_url=f"{FRONTEND_URL}?upgraded=true",
         cancel_url=f"{FRONTEND_URL}/pricing",
-        metadata={"user_id": user["id"]}
+        metadata={"user_id": user["id"], "target_tier": target_tier}
     )
     return {"checkout_url": session.url}
+
+
+@billing_router.post("/checkout/starter")
+async def checkout_starter(user = Depends(get_current_user)):
+    return await _create_stripe_checkout(user, STRIPE_STARTER_PRICE_ID, "starter")
+
+
+@billing_router.post("/checkout/pro")
+async def checkout_pro(user = Depends(get_current_user)):
+    return await _create_stripe_checkout(user, STRIPE_PRO_PRICE_ID, "pro")
+
+
+@billing_router.post("/checkout/agency")
+async def checkout_agency(user = Depends(get_current_user)):
+    return await _create_stripe_checkout(user, STRIPE_AGENCY_PRICE_ID, "agency")
+
+
+# Backward-compat: /checkout defaults to pro
+@billing_router.post("/checkout")
+async def create_checkout_session(user = Depends(get_current_user)):
+    return await _create_stripe_checkout(user, STRIPE_PRO_PRICE_ID, "pro")
+
 
 @billing_router.post("/webhook")
 async def stripe_webhook_handler(request: Request):
@@ -2306,20 +2483,44 @@ async def stripe_webhook_handler(request: Request):
         event = stripe_lib.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    price_map = _price_id_to_tier()
+
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session.get("metadata", {}).get("user_id")
+        target_tier = session.get("metadata", {}).get("target_tier", "pro")
         customer_id = session.get("customer")
         if user_id:
             await db.users.update_one(
                 {"id": user_id},
-                {"$set": {"tier": "pro", "stripe_customer_id": customer_id}}
+                {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
             )
-            logger.info(f"User {user_id} upgraded to Pro")
+            logger.info(f"User {user_id} upgraded to {target_tier}")
+
+    elif event["type"] == "customer.subscription.updated":
+        sub = event["data"]["object"]
+        customer_id = sub.get("customer")
+        items = sub.get("items", {}).get("data", [])
+        if customer_id and items:
+            price_id = items[0].get("price", {}).get("id", "")
+            new_tier = price_map.get(price_id)
+            if new_tier:
+                await db.users.update_one(
+                    {"stripe_customer_id": customer_id},
+                    {"$set": {"tier": new_tier}}
+                )
+                logger.info(f"Subscription updated: {customer_id} → {new_tier}")
+
     elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
         customer_id = event["data"]["object"].get("customer")
         if customer_id:
-            await db.users.update_one({"stripe_customer_id": customer_id}, {"$set": {"tier": "free"}})
+            await db.users.update_one(
+                {"stripe_customer_id": customer_id},
+                {"$set": {"tier": "free"}}
+            )
+            logger.info(f"Subscription ended: {customer_id} downgraded to free")
+
     return {"status": "ok"}
 
 @billing_router.get("/portal")
