@@ -439,6 +439,157 @@ async def extract_colors_from_image(image_url: str, num_colors: int = 5) -> List
         return ["#6366f1", "#8b5cf6", "#10b981"]
 
 
+async def _scrape_images(url: str, soup: BeautifulSoup, max_images: int = 6) -> List[str]:
+    """Collect usable image URLs from the scraped page."""
+    from urllib.parse import urljoin, urlparse
+    images = []
+    seen = set()
+
+    def _add(raw_url: str):
+        if not raw_url or raw_url in seen:
+            return
+        if raw_url.startswith('data:'):
+            return
+        if not raw_url.startswith('http'):
+            raw_url = urljoin(url, raw_url)
+        if not _is_safe_url(raw_url):
+            return
+        ext = Path(urlparse(raw_url).path).suffix.lower()
+        if ext and ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif', ''):
+            return
+        seen.add(raw_url)
+        images.append(raw_url)
+
+    # Priority 1: og:image
+    for meta in soup.find_all('meta', property='og:image'):
+        _add(meta.get('content', ''))
+
+    # Priority 2: twitter:image
+    for meta in soup.find_all('meta', attrs={'name': 'twitter:image'}):
+        _add(meta.get('content', ''))
+
+    # Priority 3: large <img> tags (likely hero / product images)
+    for img in soup.find_all('img', src=True):
+        src = img.get('src', '')
+        # Skip icons and tiny images
+        if any(x in src.lower() for x in ('icon', 'logo', 'avatar', 'favicon', 'badge', 'sprite')):
+            continue
+        w = img.get('width', '')
+        h = img.get('height', '')
+        try:
+            if w and int(w) < 200:
+                continue
+            if h and int(h) < 200:
+                continue
+        except (ValueError, TypeError):
+            pass
+        _add(src)
+        if len(images) >= max_images:
+            break
+
+    return images[:max_images]
+
+
+async def _download_image_to_file(image_url: str, dest_path: str) -> bool:
+    """Download an image and save to dest_path, resizing to fit within 1920x1080."""
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=False) as client:
+            resp = await client.get(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code != 200 or not resp.content:
+            return False
+        img = Image.open(io.BytesIO(resp.content)).convert('RGB')
+        # Reject tiny images
+        if img.width < 200 or img.height < 200:
+            return False
+        img.thumbnail((1920, 1080), Image.LANCZOS)
+        img.save(dest_path, 'JPEG', quality=85)
+        return True
+    except Exception as e:
+        logger.debug(f"Image download failed for {image_url}: {e}")
+        return False
+
+
+def _make_gradient_slide(width: int, height: int, color1: str, color2: str, dest_path: str):
+    """Create a gradient background slide using Pillow."""
+    c1 = tuple(int(color1.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+    c2 = tuple(int(color2.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    for y in range(height):
+        t = y / height
+        r = int(c1[0] + (c2[0] - c1[0]) * t)
+        g = int(c1[1] + (c2[1] - c1[1]) * t)
+        b = int(c1[2] + (c2[2] - c1[2]) * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    img.save(dest_path, 'JPEG', quality=85)
+
+
+def _build_slideshow_ffmpeg(
+    image_paths: List[str], sentences: List[str],
+    color1: str, width: int, height: int,
+    total_duration: float, audio_path: Optional[str], output_path: str
+) -> str:
+    """Build FFmpeg command that uses images as a Ken-Burns slideshow with captions."""
+    n = len(image_paths)
+    dur_per_image = total_duration / n
+    dur_per_cap = total_duration / max(len(sentences), 1)
+    c1 = _to_ffmpeg_color(color1)
+    fs = max(28, width // 28)
+
+    def _clean(s: str) -> str:
+        return s.replace("'", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ")[:70]
+
+    # Build input args: each image loops for its slice duration
+    inputs = ""
+    for p in image_paths:
+        inputs += f" -loop 1 -t {dur_per_image:.2f} -i \"{p}\""
+
+    # Build filter_complex: scale+pad each image, apply zoompan, concat
+    filter_parts = []
+    for i in range(n):
+        # Scale to fill canvas (cover), then pad to exact size
+        filter_parts.append(
+            f"[{i}:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},"
+            f"zoompan=z='min(zoom+0.0008,1.2)':d={int(dur_per_image*24)}:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps=24[v{i}]"
+        )
+
+    concat_inputs = "".join(f"[v{i}]" for i in range(n))
+    filter_parts.append(f"{concat_inputs}concat=n={n}:v=1:a=0[vbase]")
+
+    # Add captions as drawtext on top of [vbase]
+    drawtext_parts = []
+    for i, s in enumerate(sentences):
+        t_start = i * dur_per_cap
+        t_end = (i + 1) * dur_per_cap
+        txt = _clean(s)
+        # Use drawtext with box=1 for semi-transparent background (avoids drawbox enable issues)
+        drawtext_parts.append(
+            f"drawtext=text='{txt}':"
+            f"fontsize={fs}:fontcolor=white:borderw=2:bordercolor=black:"
+            f"box=1:boxcolor=black@0.55:boxborderw=12:"
+            f"x=(w-text_w)/2:y=h*0.82:"
+            f"enable='between(t,{t_start:.2f},{t_end:.2f})'"
+        )
+
+    # Progress bar
+    drawtext_parts.append(
+        f"drawbox=x=0:y=h-8:w='iw*t/{total_duration:.2f}':h=8:color={c1}@1.0:t=fill"
+    )
+
+    caption_filter = ",".join(drawtext_parts)
+    filter_complex = ";".join(filter_parts) + f";[vbase]{caption_filter}[vout]"
+
+    audio_part = f" -i \"{audio_path}\" -map \"[vout]\" -map 1:a -c:a aac -shortest" if audio_path else " -map \"[vout]\""
+    return (
+        f"\"{FFMPEG_BIN}\"{inputs}"
+        f" -filter_complex \"{filter_complex}\""
+        f"{audio_part}"
+        f" -t {total_duration:.2f} -threads 2 -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -y \"{output_path}\""
+    )
+
+
 async def generate_tts_audio(text: str, output_path: str) -> bool:
     try:
         from gtts import gTTS
@@ -601,12 +752,15 @@ async def scrape_url(url: str = Form(...)):
         except Exception:
             pass
 
+        images = await _scrape_images(url, soup)
+
         brand_data = {
             "url": url,
             "colors": colors[:3],
             "headline": headline,
             "features": features[:5],
-            "description": description[:200]
+            "description": description[:200],
+            "images": images
         }
 
         return brand_data
@@ -859,12 +1013,36 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     color1 = request.brand_colors[0] if request.brand_colors else "#6366f1"
     color2 = request.brand_colors[1] if len(request.brand_colors) > 1 else "#8b5cf6"
 
-    cmd = await generate_ffmpeg_command(
-        sentences, color1, color2, width, height,
+    # Try to download scraped images for use as video backgrounds
+    tmp_dir = Path(tempfile.mkdtemp(prefix="swiftpack_imgs_"))
+    local_images: List[str] = []
+    loop = asyncio.get_event_loop()
+
+    if request.images:
+        download_tasks = []
+        for idx, img_url in enumerate(request.images[:6]):
+            dest = str(tmp_dir / f"img_{idx}.jpg")
+            download_tasks.append(_download_image_to_file(img_url, dest))
+        results_dl = await asyncio.gather(*download_tasks, return_exceptions=True)
+        for idx, ok in enumerate(results_dl):
+            dest = str(tmp_dir / f"img_{idx}.jpg")
+            if ok is True and Path(dest).exists():
+                local_images.append(dest)
+
+    # If we don't have enough real images, pad with gradient slides
+    num_needed = min(len(sentences), 6)
+    num_needed = max(num_needed, 2)
+    while len(local_images) < num_needed:
+        slide_path = str(tmp_dir / f"gradient_{len(local_images)}.jpg")
+        await loop.run_in_executor(None, lambda p=slide_path: _make_gradient_slide(width, height, color1, color2, p))
+        local_images.append(slide_path)
+
+    cmd = _build_slideshow_ffmpeg(
+        local_images, sentences, color1, width, height,
         total_duration, audio_path, output_path
     )
 
-    logger.info(f"Running FFmpeg command: {cmd[:200]}...")
+    logger.info(f"Running FFmpeg slideshow command ({len(local_images)} images): {cmd[:200]}...")
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
@@ -877,6 +1055,13 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
 
     if not Path(output_path).exists():
         raise HTTPException(status_code=500, detail="FFmpeg exited 0 but output file missing")
+
+    # Clean up temp image dir
+    import shutil
+    try:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception:
+        pass
 
     video_doc = {
         "id": video_id,
@@ -1081,11 +1266,14 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
     script_req.framework = "Step-by-Step"
     tutorial_script = await generate_script(script_req, user=None)
 
+    scraped_images = brand_data.get("images", [])
+
     # Step 4: Ad video
     ad_video = None
     try:
         ad_video_req = CompleteVideoRequest(
             script=truncate_to_sentences(ad_script["content"]),
+            images=scraped_images,
             brand_colors=brand_data["colors"],
             format="9:16",
             add_voiceover=True,
@@ -1101,6 +1289,7 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
     try:
         tutorial_video_req = CompleteVideoRequest(
             script=truncate_to_sentences(tutorial_script["content"]),
+            images=scraped_images,
             brand_colors=brand_data["colors"],
             format="16:9",
             add_voiceover=True,
