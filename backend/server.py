@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="google.generativeai")
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request, Response
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse, JSONResponse
@@ -34,7 +31,7 @@ from collections import Counter, defaultdict
 import re
 import ipaddress
 import time
-import google.generativeai as genai
+from google import genai
 import subprocess
 import asyncio
 try:
@@ -115,10 +112,9 @@ OUTPUTS_DIR.mkdir(exist_ok=True)
 gemini_key = os.getenv('GEMINI_API_KEY')
 _gemini_ready = bool(gemini_key and gemini_key != 'your-gemini-api-key-here')
 if _gemini_ready:
-    genai.configure(api_key=gemini_key)
-    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+    _gemini_client = genai.Client(api_key=gemini_key)
 else:
-    gemini_model = None  # will trigger fallbacks / clear errors
+    _gemini_client = None  # will trigger fallbacks / clear errors
 
 # ── OpenRouter (Gemini fallback) ───────────────────────────────────────────────
 _openrouter_key = os.getenv('OPENROUTER_API_KEY', '')
@@ -511,7 +507,7 @@ async def generate_ffmpeg_command(
 ) -> str:
     duration_per_caption = total_duration / max(len(sentences), 1)
 
-    if not _gemini_ready or gemini_model is None:
+    if not _gemini_ready or _gemini_client is None:
         logger.info("Gemini not configured, using fallback FFmpeg template")
         return _fallback_ffmpeg(sentences, color1, width, height, duration_per_caption, audio_path, output_path)
 
@@ -533,7 +529,7 @@ Return ONLY the ffmpeg command as a single line. No markdown, no explanation. Us
 
     try:
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: gemini_model.generate_content(prompt))
+        response = await loop.run_in_executor(None, lambda: _gemini_client.models.generate_content(model='gemini-2.5-flash', contents=prompt))
         cmd = re.sub(r'^```[a-z]*\n?|\n?```$', '', response.text.strip()).strip()
         if not cmd.startswith('ffmpeg'):
             raise ValueError("Not an ffmpeg command")
@@ -726,7 +722,7 @@ def _template_script(request: "ScriptRequest") -> str:
 async def _gemini_generate(prompt: str) -> str:
     """Try Gemini 2.5 Flash. Raises on failure."""
     loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, lambda: gemini_model.generate_content(prompt))
+    response = await loop.run_in_executor(None, lambda: _gemini_client.models.generate_content(model='gemini-2.5-flash', contents=prompt))
     text = response.text.strip()
     if not text:
         raise ValueError("Gemini returned empty response")
@@ -765,7 +761,7 @@ async def generate_script(request: ScriptRequest, user = Depends(get_optional_us
     source = "unknown"
 
     # Tier 1 — Gemini
-    if _gemini_ready and gemini_model is not None:
+    if _gemini_ready and _gemini_client is not None:
         for attempt in range(2):
             try:
                 script_text = await _gemini_generate(prompt)

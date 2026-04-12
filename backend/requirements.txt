@@ -24,14 +24,12 @@ fastuuid==0.14.0
 filelock==3.24.3
 frozenlist==1.8.0
 fsspec==2026.2.0
-google-ai-generativelanguage==0.6.15
 google-api-core==2.30.0
 google-api-python-client==2.190.0
 google-auth==2.49.0.dev0
 google-auth-httplib2==0.3.0
 pyttsx3==2.90
 google-genai==1.65.0
-google-generativeai==0.8.6
 googleapis-common-protos==1.72.0
 grpcio==1.78.1
 grpcio-status==1.71.2
