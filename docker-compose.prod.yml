@@ -28,7 +28,8 @@ services:
       - DB_NAME=swiftpackai_db
       - BACKEND_URL=https://swiftpackai.tech
       - FRONTEND_URL=https://swiftpackai.tech
-      - CORS_ORIGINS=https://swiftpackai.tech
+      - CORS_ORIGINS=https://swiftpackai.tech,https://www.swiftpackai.tech
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/tts-key.json
     depends_on:
       - mongo
     expose:
@@ -36,6 +37,7 @@ services:
     volumes:
       - backend_outputs:/app/outputs
       - backend_uploads:/app/uploads
+      - /home/ubuntu/secrets/swiftpack-tts-key.json:/run/secrets/tts-key.json:ro
 
   frontend:
     build:
