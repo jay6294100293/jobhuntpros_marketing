@@ -335,6 +335,9 @@ class CompleteVideoRequest(BaseModel):
     add_voiceover: bool = True
     add_captions: bool = True
     add_progress_bar: bool = True
+    product_name: Optional[str] = None
+    features: List[str] = []
+    description: Optional[str] = None
 
 class PosterRequest(BaseModel):
     headline: str
@@ -509,19 +512,453 @@ async def _download_image_to_file(image_url: str, dest_path: str) -> bool:
         return False
 
 
-def _make_gradient_slide(width: int, height: int, color1: str, color2: str, dest_path: str):
-    """Create a gradient background slide using Pillow."""
-    c1 = tuple(int(color1.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-    c2 = tuple(int(color2.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-    img = Image.new('RGB', (width, height))
-    draw = ImageDraw.Draw(img)
+def _hex_to_rgb(h: str) -> tuple:
+    h = h.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _lighten(rgb: tuple, factor: float = 0.3) -> tuple:
+    return tuple(min(255, int(c + (255 - c) * factor)) for c in rgb)
+
+
+def _darken(rgb: tuple, factor: float = 0.3) -> tuple:
+    return tuple(max(0, int(c * (1 - factor))) for c in rgb)
+
+
+def _draw_gradient_bg(draw: ImageDraw.Draw, width: int, height: int, c1: tuple, c2: tuple):
+    """Draw vertical gradient background."""
     for y in range(height):
         t = y / height
         r = int(c1[0] + (c2[0] - c1[0]) * t)
         g = int(c1[1] + (c2[1] - c1[1]) * t)
         b = int(c1[2] + (c2[2] - c1[2]) * t)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
-    img.save(dest_path, 'JPEG', quality=85)
+
+
+def _get_font(size: int):
+    """Try to load a bold system font, fall back to default."""
+    candidates = [
+        # Windows
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/Arial Bold.ttf",
+        "C:/Windows/Fonts/calibrib.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        # Linux
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            try:
+                from PIL import ImageFont as _IF
+                return _IF.truetype(path, size)
+            except Exception:
+                continue
+    from PIL import ImageFont as _IF
+    return _IF.load_default()
+
+
+def _get_regular_font(size: int):
+    """Try to load a regular system font."""
+    candidates = [
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            try:
+                from PIL import ImageFont as _IF
+                return _IF.truetype(path, size)
+            except Exception:
+                continue
+    from PIL import ImageFont as _IF
+    return _IF.load_default()
+
+
+def _wrap_text(text: str, font, max_width: int, draw: ImageDraw.Draw) -> list:
+    """Wrap text to fit within max_width pixels."""
+    words = text.split()
+    lines = []
+    current = []
+    for word in words:
+        test = ' '.join(current + [word])
+        try:
+            bbox = draw.textbbox((0, 0), test, font=font)
+            w = bbox[2] - bbox[0]
+        except Exception:
+            w = len(test) * (font.size if hasattr(font, 'size') else 10)
+        if w <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(' '.join(current))
+            current = [word]
+    if current:
+        lines.append(' '.join(current))
+    return lines or [text]
+
+
+def _draw_text_centered(draw, text, font, y, width, color, shadow=True):
+    """Draw horizontally centered text with optional drop shadow."""
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+    except Exception:
+        tw = len(text) * 10
+    x = (width - tw) // 2
+    if shadow:
+        draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, 120))
+    draw.text((x, y), text, font=font, fill=color)
+
+
+def _draw_decorative_bar(draw, x, y, w, h, color):
+    draw.rectangle([x, y, x + w, y + h], fill=color)
+
+
+def _draw_checkmark(draw, cx, cy, r, color, width=4):
+    """Draw a checkmark shape inside a circle of radius r centered at (cx, cy)."""
+    # Tick mark: from bottom-left to mid-bottom, then up to top-right
+    x1 = cx - int(r * 0.45)
+    y1 = cy + int(r * 0.05)
+    x2 = cx - int(r * 0.05)
+    y2 = cy + int(r * 0.40)
+    x3 = cx + int(r * 0.45)
+    y3 = cy - int(r * 0.35)
+    draw.line([(x1, y1), (x2, y2), (x3, y3)], fill=color, width=width)
+
+
+def _make_slide_hero(width, height, color1, color2, product_name, headline, dest_path):
+    """Slide 1 — Hero: product name + main headline, strong brand presence."""
+    c1 = _hex_to_rgb(color1)
+    c2 = _hex_to_rgb(color2)
+    accent = _lighten(c1, 0.5)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, _darken(c1, 0.2), _darken(c2, 0.1))
+
+    # Decorative top bar
+    _draw_decorative_bar(draw, 0, 0, width, height // 20, (*accent, 255))
+
+    # Large decorative circle (brand element)
+    cx, cy = int(width * 0.82), int(height * 0.22)
+    r = int(width * 0.28)
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*_lighten(c1, 0.15), 255))
+
+    # Product name tag
+    tag_font = _get_regular_font(max(18, width // 42))
+    tag = product_name.upper()[:24] if product_name else "SWIFTPACK AI"
+    tag_y = int(height * 0.12)
+    _draw_text_centered(draw, tag, tag_font, tag_y, width, (*_lighten(c1, 0.7),), shadow=False)
+
+    # Accent line under tag
+    line_w = int(width * 0.15)
+    draw.rectangle([(width // 2 - line_w // 2), tag_y + int(height * 0.045),
+                     width // 2 + line_w // 2, tag_y + int(height * 0.048)], fill=(*accent,))
+
+    # Main headline — big, bold, centered
+    h1_font = _get_font(max(42, width // 14))
+    headline_text = headline[:60] if headline else "Launch in 30 Seconds"
+    lines = _wrap_text(headline_text, h1_font, int(width * 0.85), draw)
+    line_h = max(52, width // 12)
+    text_block_h = len(lines) * line_h
+    start_y = (height - text_block_h) // 2
+    for i, line in enumerate(lines):
+        _draw_text_centered(draw, line, h1_font, start_y + i * line_h, width, (255, 255, 255))
+
+    # Bottom tagline
+    sub_font = _get_regular_font(max(22, width // 34))
+    sub_y = int(height * 0.78)
+    _draw_text_centered(draw, "Powered by AI", sub_font, sub_y, width, (*_lighten(c1, 0.6),), shadow=False)
+
+    # Bottom decorative bar
+    _draw_decorative_bar(draw, 0, height - height // 20, width, height // 20, (*_darken(c2, 0.15),))
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_slide_problem(width, height, color1, color2, sentence, dest_path):
+    """Slide 2 — Problem: pain point, emotional contrast, dark/urgent tone."""
+    c1 = _hex_to_rgb(color1)
+    dark_bg = _darken(c1, 0.55)
+    mid_bg = _darken(c1, 0.35)
+    accent = _lighten(c1, 0.5)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, dark_bg, mid_bg)
+
+    # Top label
+    label_font = _get_regular_font(max(18, width // 44))
+    label_y = int(height * 0.08)
+    _draw_text_centered(draw, "THE PROBLEM", label_font, label_y, width, (*accent,), shadow=False)
+    _draw_decorative_bar(draw, width // 2 - int(width * 0.06), label_y + int(height * 0.042),
+                         int(width * 0.12), 3, (*accent,))
+
+    # Big ? icon
+    icon_font = _get_font(max(80, width // 8))
+    icon_y = int(height * 0.18)
+    _draw_text_centered(draw, "?", icon_font, icon_y, width, (*_lighten(c1, 0.25),))
+
+    # Pain point text
+    pain_font = _get_font(max(34, width // 20))
+    text = sentence[:120] if sentence else "Still doing it the hard way?"
+    lines = _wrap_text(text, pain_font, int(width * 0.8), draw)
+    line_h = max(44, width // 18)
+    start_y = int(height * 0.44)
+    for i, line in enumerate(lines):
+        _draw_text_centered(draw, line, pain_font, start_y + i * line_h, width, (255, 255, 255))
+
+    # Sub-text
+    sub_font = _get_regular_font(max(20, width // 36))
+    _draw_text_centered(draw, "There's a better way.", sub_font, int(height * 0.78),
+                         width, (*_lighten(c1, 0.6),), shadow=False)
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_slide_solution(width, height, color1, color2, product_name, sentence, dest_path):
+    """Slide 3 — Solution: product name + value prop, bright and optimistic."""
+    c1 = _hex_to_rgb(color1)
+    c2 = _hex_to_rgb(color2)
+    accent = _lighten(c1, 0.55)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, c1, c2)
+
+    # Large checkmark background circle
+    cx, cy = width // 2, int(height * 0.28)
+    r = int(width * 0.18)
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*_lighten(c1, 0.2),))
+    _draw_checkmark(draw, cx, cy, r, (255, 255, 255), width=max(6, width // 90))
+
+    # "Introducing" label
+    intro_font = _get_regular_font(max(18, width // 42))
+    intro_y = int(height * 0.46)
+    _draw_text_centered(draw, "INTRODUCING", intro_font, intro_y, width, (*accent,), shadow=False)
+
+    # Product name — large
+    name_font = _get_font(max(46, width // 14))
+    name = product_name[:28] if product_name else "SwiftPack AI"
+    name_y = int(height * 0.52)
+    _draw_text_centered(draw, name, name_font, name_y, width, (255, 255, 255))
+
+    # Value prop sentence
+    val_font = _get_regular_font(max(24, width // 30))
+    text = sentence[:100] if sentence else "The fastest way to create marketing content"
+    lines = _wrap_text(text, val_font, int(width * 0.82), draw)
+    line_h = max(32, width // 22)
+    start_y = int(height * 0.66)
+    for i, line in enumerate(lines):
+        _draw_text_centered(draw, line, val_font, start_y + i * line_h, width, (*_lighten(c1, 0.75),))
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_slide_features(width, height, color1, color2, features, dest_path):
+    """Slide 4 — Features: 3 checkmarks with feature bullets."""
+    c1 = _hex_to_rgb(color1)
+    c2 = _hex_to_rgb(color2)
+    accent = _lighten(c1, 0.55)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, _darken(c1, 0.1), c2)
+
+    # Header
+    hdr_font = _get_font(max(28, width // 24))
+    _draw_text_centered(draw, "WHY IT WORKS", hdr_font, int(height * 0.07), width, (255, 255, 255))
+    _draw_decorative_bar(draw, width // 2 - int(width * 0.08), int(height * 0.13),
+                         int(width * 0.16), 4, (*accent,))
+
+    # Feature list
+    item_font = _get_font(max(28, width // 24))
+    sub_font = _get_regular_font(max(20, width // 38))
+    feat_list = features[:3] if features else ["Fast Results", "Easy to Use", "Professional Quality"]
+
+    spacing = height // (len(feat_list) + 2)
+    left_margin = int(width * 0.1)
+
+    for i, feat in enumerate(feat_list):
+        y_base = int(height * 0.22) + i * spacing
+
+        # Circle with checkmark
+        cr = int(width * 0.055)
+        cx = left_margin + cr
+        cy = y_base + cr
+        draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=(*accent,))
+        _draw_checkmark(draw, cx, cy, cr, (255, 255, 255), width=max(3, width // 180))
+
+        # Feature text
+        feat_text = feat[:50]
+        text_x = left_margin + cr * 2 + int(width * 0.04)
+        draw.text((text_x + 1, y_base + 1), feat_text, font=item_font, fill=(0, 0, 0, 80))
+        draw.text((text_x, y_base), feat_text, font=item_font, fill=(255, 255, 255))
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_slide_how_it_works(width, height, color1, color2, steps, dest_path):
+    """Slide 5 — How it works: numbered steps."""
+    c1 = _hex_to_rgb(color1)
+    c2 = _hex_to_rgb(color2)
+    accent = _lighten(c1, 0.55)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, c2, _darken(c1, 0.1))
+
+    # Header
+    hdr_font = _get_font(max(28, width // 24))
+    _draw_text_centered(draw, "HOW IT WORKS", hdr_font, int(height * 0.07), width, (255, 255, 255))
+    _draw_decorative_bar(draw, width // 2 - int(width * 0.08), int(height * 0.13),
+                         int(width * 0.16), 4, (*accent,))
+
+    step_list = steps[:3] if steps else ["Paste your URL", "AI generates content", "Download & launch"]
+    step_font = _get_regular_font(max(24, width // 32))
+    num_font = _get_font(max(32, width // 22))
+
+    spacing = height // (len(step_list) + 2)
+    left_margin = int(width * 0.1)
+
+    for i, step in enumerate(step_list):
+        y_base = int(height * 0.22) + i * spacing
+
+        # Number badge
+        nr = int(width * 0.055)
+        nx = left_margin + nr
+        ny = y_base + nr
+        draw.ellipse([nx - nr, ny - nr, nx + nr, ny + nr], fill=(*_darken(c1, 0.25),))
+        num_str = str(i + 1)
+        nb = draw.textbbox((0, 0), num_str, font=num_font)
+        nw = nb[2] - nb[0]
+        draw.text((nx - nw // 2, ny - nr // 2), num_str, font=num_font, fill=(255, 255, 255))
+
+        # Connector line (between steps)
+        if i < len(step_list) - 1:
+            lx = nx
+            draw.rectangle([lx - 2, ny + nr, lx + 2, ny + spacing - nr], fill=(*_lighten(c1, 0.3),))
+
+        # Step text
+        step_text = step[:55]
+        text_x = left_margin + nr * 2 + int(width * 0.04)
+        draw.text((text_x + 1, y_base + 1), step_text, font=step_font, fill=(0, 0, 0, 80))
+        draw.text((text_x, y_base), step_text, font=step_font, fill=(255, 255, 255))
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path):
+    """Slide 6 — CTA: URL, product name, urgency."""
+    c1 = _hex_to_rgb(color1)
+    c2 = _hex_to_rgb(color2)
+    accent = _lighten(c1, 0.55)
+
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+    _draw_gradient_bg(draw, width, height, _darken(c2, 0.1), _darken(c1, 0.2))
+
+    # Top label
+    label_font = _get_regular_font(max(18, width // 44))
+    _draw_text_centered(draw, "GET STARTED TODAY", label_font, int(height * 0.08), width, (*accent,), shadow=False)
+
+    # Large CTA headline
+    cta_font = _get_font(max(44, width // 14))
+    _draw_text_centered(draw, "Try It Free", cta_font, int(height * 0.22), width, (255, 255, 255))
+
+    # Product name
+    name_font = _get_font(max(32, width // 20))
+    name = product_name[:30] if product_name else "SwiftPack AI"
+    _draw_text_centered(draw, name, name_font, int(height * 0.4), width, (*_lighten(c1, 0.7),))
+
+    # URL button visual
+    btn_w = int(width * 0.72)
+    btn_h = int(height * 0.09)
+    btn_x = (width - btn_w) // 2
+    btn_y = int(height * 0.54)
+    # Button background
+    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h],
+                            radius=btn_h // 3, fill=(*_lighten(c1, 0.2),))
+    url_font = _get_regular_font(max(20, width // 36))
+    url_text = (url[:40] if url else "swiftpackai.tech")
+    url_bbox = draw.textbbox((0, 0), url_text, font=url_font)
+    url_w = url_bbox[2] - url_bbox[0]
+    url_x = (width - url_w) // 2
+    draw.text((url_x, btn_y + (btn_h - (url_bbox[3] - url_bbox[1])) // 2), url_text, font=url_font, fill=(255, 255, 255))
+
+    # Free badge
+    badge_font = _get_font(max(24, width // 30))
+    _draw_text_centered(draw, "No credit card required", badge_font, int(height * 0.72),
+                         width, (*_lighten(c1, 0.6),))
+
+    # Urgency strip at bottom
+    strip_h = int(height * 0.07)
+    draw.rectangle([0, height - strip_h, width, height], fill=(*accent,))
+    urg_font = _get_regular_font(max(16, width // 46))
+    _draw_text_centered(draw, "Start your free trial now", urg_font,
+                         height - strip_h + strip_h // 3, width, (255, 255, 255), shadow=False)
+
+    img.save(dest_path, 'JPEG', quality=92)
+
+
+def _make_design_slides(
+    width: int, height: int,
+    color1: str, color2: str,
+    product_name: str,
+    features: List[str],
+    sentences: List[str],
+    url: str,
+    dest_dir: Path
+) -> List[str]:
+    """
+    Generate 6 structured marketing slide templates using Pillow.
+    Returns list of file paths in slide order.
+    Templates: Hero, Problem, Solution, Features, How It Works, CTA
+    """
+    slides = []
+
+    # Slide 1: Hero
+    p = str(dest_dir / "slide_hero.jpg")
+    headline = sentences[0] if sentences else "Launch in 30 Seconds"
+    _make_slide_hero(width, height, color1, color2, product_name, headline, p)
+    slides.append(p)
+
+    # Slide 2: Problem
+    p = str(dest_dir / "slide_problem.jpg")
+    problem = sentences[1] if len(sentences) > 1 else "Tired of slow, expensive marketing?"
+    _make_slide_problem(width, height, color1, color2, problem, p)
+    slides.append(p)
+
+    # Slide 3: Solution
+    p = str(dest_dir / "slide_solution.jpg")
+    solution = sentences[2] if len(sentences) > 2 else "One click, professional launch pack"
+    _make_slide_solution(width, height, color1, color2, product_name, solution, p)
+    slides.append(p)
+
+    # Slide 4: Features
+    p = str(dest_dir / "slide_features.jpg")
+    _make_slide_features(width, height, color1, color2, features, p)
+    slides.append(p)
+
+    # Slide 5: How it works
+    p = str(dest_dir / "slide_how.jpg")
+    steps = [s for s in sentences[3:6]] if len(sentences) > 3 else []
+    _make_slide_how_it_works(width, height, color1, color2, steps, p)
+    slides.append(p)
+
+    # Slide 6: CTA
+    p = str(dest_dir / "slide_cta.jpg")
+    _make_slide_cta(width, height, color1, color2, product_name, url, p)
+    slides.append(p)
+
+    return slides
 
 
 def _build_slideshow_ffmpeg(
@@ -1033,13 +1470,52 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
             if ok is True and Path(dest).exists():
                 local_images.append(dest)
 
-    # If we don't have enough real images, pad with gradient slides
-    num_needed = min(len(sentences), 6)
-    num_needed = max(num_needed, 2)
-    while len(local_images) < num_needed:
-        slide_path = str(tmp_dir / f"gradient_{len(local_images)}.jpg")
-        await loop.run_in_executor(None, lambda p=slide_path: _make_gradient_slide(width, height, color1, color2, p))
-        local_images.append(slide_path)
+    # If we have fewer real images than needed, generate branded design slides to fill gaps.
+    # Strategy: always generate the full 6-slide design set as fallback candidates,
+    # then interleave real images where we have them.
+    design_slides = await loop.run_in_executor(
+        None,
+        lambda: _make_design_slides(
+            width=width, height=height,
+            color1=color1, color2=color2,
+            product_name=request.product_name or "",
+            features=request.features or [],
+            sentences=sentences,
+            url="",
+            dest_dir=tmp_dir
+        )
+    )
+
+    # Build final slide list: real images first, then design slides to reach 6 total
+    combined: List[str] = []
+    design_idx = 0
+
+    # We want exactly 6 slides for a well-paced video
+    TARGET_SLIDES = 6
+    real_img_count = len(local_images)
+
+    if real_img_count >= TARGET_SLIDES:
+        # Enough real images — use them all (up to 6)
+        combined = local_images[:TARGET_SLIDES]
+    elif real_img_count == 0:
+        # No real images — use all 6 design slides
+        combined = design_slides[:TARGET_SLIDES]
+    else:
+        # Mix: interleave real images with design slides for visual variety
+        # Pattern: hero slide, real image, design slide, real image, design slide, CTA
+        combined.append(design_slides[0])  # Hero always first
+        for i in range(real_img_count):
+            combined.append(local_images[i])
+            if len(combined) < TARGET_SLIDES - 1 and design_idx + 1 < len(design_slides) - 1:
+                design_idx += 1
+                combined.append(design_slides[design_idx])
+        # Always end with CTA
+        if len(combined) < TARGET_SLIDES:
+            combined.append(design_slides[-1])  # CTA
+        combined = combined[:TARGET_SLIDES]
+
+    local_images = combined
+    total_duration = len(local_images) * 3.0  # 3s per slide
 
     cmd = _build_slideshow_ffmpeg(
         local_images, sentences, color1, width, height,
@@ -1272,6 +1748,8 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
 
     scraped_images = brand_data.get("images", [])
 
+    features = brand_data.get("features", [])[:5]
+
     # Step 4: Ad video
     ad_video = None
     try:
@@ -1282,7 +1760,10 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
             format="9:16",
             add_voiceover=True,
             add_captions=True,
-            add_progress_bar=True
+            add_progress_bar=True,
+            product_name=request.product_name,
+            features=features,
+            description=brand_data.get("description", "")[:150]
         )
         ad_video = await create_complete_video(ad_video_req, user=None)
     except Exception as e:
@@ -1298,7 +1779,10 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
             format="16:9",
             add_voiceover=True,
             add_captions=True,
-            add_progress_bar=True
+            add_progress_bar=True,
+            product_name=request.product_name,
+            features=features,
+            description=brand_data.get("description", "")[:150]
         )
         tutorial_video = await create_complete_video(tutorial_video_req, user=None)
     except Exception as e:
