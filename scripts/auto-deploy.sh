@@ -10,7 +10,7 @@ mkdir -p /home/ubuntu/logs
 
 cd $REPO_DIR || exit 1
 
-git fetch origin $BRANCH >> $LOG_FILE 2>&1
+GIT_SSH_COMMAND="ssh -i /home/ubuntu/.ssh/swiftpack_deploy_key -o StrictHostKeyChecking=no" git fetch origin $BRANCH >> $LOG_FILE 2>&1
 
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/$BRANCH)
@@ -21,7 +21,7 @@ fi
 
 echo "$(date) — New commit detected. Deploying SwiftPack AI..." >> $LOG_FILE
 
-git pull origin $BRANCH >> $LOG_FILE 2>&1
+GIT_SSH_COMMAND="ssh -i /home/ubuntu/.ssh/swiftpack_deploy_key -o StrictHostKeyChecking=no" git pull origin $BRANCH >> $LOG_FILE 2>&1
 
 ENV_FILE=$ENV_FILE docker-compose -f $COMPOSE_FILE down >> $LOG_FILE 2>&1
 ENV_FILE=$ENV_FILE docker-compose -f $COMPOSE_FILE up -d --build >> $LOG_FILE 2>&1
