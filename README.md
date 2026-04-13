@@ -169,59 +169,49 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ## Deployment
 
-### GitHub Secrets required
+SwiftPack AI uses **pull-based deployment**.  
+Push to `main` → tests run → server auto-deploys within 5 minutes.  
+No GitHub Secrets needed.
 
-Before the CI/CD pipeline can deploy, add these secrets under  
-**GitHub → Settings → Secrets and variables → Actions**:
+View logs on server:
+```bash
+tail -f /home/ubuntu/logs/swiftpack-deploy.log
+```
 
-| Secret | Value |
-|--------|-------|
-| `SSH_PRIVATE_KEY` | Private SSH key (whose public key is in `~/.ssh/authorized_keys` on the server) |
-| `SERVER_HOST` | EC2 public IP address (e.g. `54.123.45.67`) |
-| `SERVER_USER` | `ubuntu` |
+### How it works
+
+1. GitHub Actions runs `pytest` (skips gracefully if no test files exist) — no SSH, no secrets
+2. The server runs a cron job every 5 minutes that calls `auto-deploy-swiftpack.sh`
+3. The script does `git fetch` and compares local vs remote HEAD
+4. If a new commit exists it pulls, rebuilds containers, and logs the deploy
+5. If already up-to-date it exits silently (zero overhead)
 
 ### Fresh server setup
 
-Run once on a new EC2 instance:
+Run once on a new EC2 instance to configure the auto-deploy cron:
 
 ```bash
-# Copy the script to the server then run it
-scp scripts/server-setup.sh ubuntu@YOUR_SERVER_IP:~/
-ssh ubuntu@YOUR_SERVER_IP "bash ~/server-setup.sh"
-```
+# Clone repo
+git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /home/ubuntu/swiftpack
 
-What it does: installs Docker + Docker Compose + git, creates `/home/ubuntu/secrets/` (mode 700), clones the repo into `/home/ubuntu/swiftpack/`, configures the firewall (80/443/SSH), installs Certbot.
+# Run cron setup script (copies auto-deploy.sh and installs crontab entry)
+bash /home/ubuntu/swiftpack/scripts/setup-cron.sh
 
-### Add secrets to the server manually
-
-```bash
-ssh ubuntu@YOUR_SERVER_IP
-nano /home/ubuntu/secrets/swiftpack.env   # fill in all REPLACE_WITH_... values
+# Add secrets
+nano /home/ubuntu/secrets/swiftpack.env
 ```
 
 ### SSL certificate
 
 ```bash
-ssh ubuntu@YOUR_SERVER_IP
 sudo certbot certonly --standalone -d swiftpackai.tech -d www.swiftpackai.tech
 ```
-
-### What happens on every push to main
-
-1. GitHub Actions runs `pytest` against `backend/requirements.txt` (skips gracefully if no test files exist)
-2. If tests pass, it SSHes into the server and runs:
-   ```bash
-   git pull origin main
-   docker-compose -f docker-compose.prod.yml down
-   docker-compose -f docker-compose.prod.yml up -d --build
-   docker system prune -f
-   ```
-3. Logs `SwiftPack AI deployed successfully`
 
 ### Manual deploy (emergency)
 
 ```bash
-bash scripts/deploy.sh ubuntu@YOUR_SERVER_IP
+ssh -i ~/path/to/key.pem ubuntu@99.79.39.115 \
+  "cd /home/ubuntu/swiftpack && git pull && docker compose up -d --build"
 ```
 
 ---
