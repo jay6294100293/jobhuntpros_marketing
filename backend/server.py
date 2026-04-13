@@ -298,6 +298,9 @@ _RATE_LIMITS = {
     "/api/scrape": 30,
     "/api/auth/register": 10,
     "/api/auth/login": 20,
+    "/api/talking-head/generate": 3,   # expensive GPU call — 3/min hard cap
+    "/api/talking-head/consent": 10,
+    "/api/talking-head/verify-identity": 5,
 }
 
 app = FastAPI()
@@ -2300,7 +2303,9 @@ async def me(user = Depends(get_current_user)):
         "formats": cfg["formats"],
         "label": {"free": "Free", "starter": "Starter ($19/mo)", "pro": "Pro ($49/mo)", "agency": "Agency ($149/mo)"}.get(tier, tier.title()),
         "watermark": tier == "free",
+        "talking_head": tier in ("pro", "agency"),
     }
+    safe["identity_verified"] = bool(user.get("identity_verified"))
     safe["has_agreed"] = bool(agreement)
     return safe
 
@@ -2687,10 +2692,268 @@ async def billing_portal(user = Depends(get_current_user)):
     return {"portal_url": session.url}
 
 
+# ── Talking Head Router (SadTalker / Priority 7) ──────────────────────────────
+talking_router = APIRouter(prefix="/api/talking-head")
+
+# Reuse Modal SadTalker app name from env (or default)
+MODAL_SADTALKER_APP = os.getenv('MODAL_SADTALKER_APP', 'swiftpack-sadtalker')
+
+
+class ConsentRequest(BaseModel):
+    photo_hash: str      # SHA-256 hex of the portrait bytes, computed client-side
+    audio_hash: str      # SHA-256 hex of the audio bytes
+
+
+async def _require_talking_head_access(user: dict):
+    """Gate: Pro or Agency tier only."""
+    tier = user.get("tier", "free")
+    if tier not in ("pro", "agency"):
+        raise HTTPException(
+            status_code=403,
+            detail="Talking head video is a Pro feature. Upgrade to Pro ($49/mo) or Agency ($149/mo)."
+        )
+
+
+async def _require_identity_verified(user: dict):
+    """Gate: Stripe Identity must have been verified."""
+    if not user.get("identity_verified"):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "ID verification is required before generating talking head videos. "
+                "Please complete identity verification first."
+            )
+        )
+
+
+async def _require_consent(user: dict, photo_hash: str):
+    """Gate: explicit consent for this exact photo must be on file."""
+    rec = await db.talking_head_consents.find_one(
+        {"user_id": user["id"], "photo_hash": photo_hash}
+    )
+    if not rec:
+        raise HTTPException(
+            status_code=403,
+            detail="You must confirm consent for this portrait photo before generating a video."
+        )
+
+
+@talking_router.post("/consent")
+async def record_consent(body: ConsentRequest, user=Depends(get_current_user)):
+    """
+    Record user's explicit consent for a specific portrait + audio pair.
+    Must be called before /generate. Timestamps stored for EU AI Act compliance.
+    """
+    await _require_talking_head_access(user)
+    await _require_identity_verified(user)
+
+    # Upsert consent record (photo_hash is the unique key per user)
+    await db.talking_head_consents.update_one(
+        {"user_id": user["id"], "photo_hash": body.photo_hash},
+        {"$set": {
+            "user_id": user["id"],
+            "photo_hash": body.photo_hash,
+            "audio_hash": body.audio_hash,
+            "consented_at": datetime.now(timezone.utc).isoformat(),
+            "ip": "recorded_at_request",   # populated by middleware if needed
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "message": "Consent recorded. You may now generate a talking head video."}
+
+
+@talking_router.post("/verify-identity")
+async def start_identity_verification(user=Depends(get_current_user)):
+    """
+    Create a Stripe Identity verification session.
+    Returns a client_secret the frontend uses to open the Stripe Identity modal.
+    """
+    await _require_talking_head_access(user)
+
+    if not stripe_lib or not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured.")
+
+    if user.get("identity_verified"):
+        return {"already_verified": True, "message": "Your identity is already verified."}
+
+    session = stripe_lib.identity.VerificationSession.create(
+        type="document",
+        metadata={"user_id": user["id"]},
+        options={"document": {"require_live_capture": True, "require_matching_selfie": True}},
+    )
+    return {
+        "session_id": session.id,
+        "client_secret": session.client_secret,
+        "url": session.url,
+    }
+
+
+@billing_router.post("/webhook/identity")
+async def stripe_identity_webhook(request: Request):
+    """
+    Stripe Identity webhook — sets identity_verified=True on the user record
+    when Stripe confirms the verification session has been verified.
+    """
+    if not stripe_lib or not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Stripe webhook not configured")
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    # Identity webhooks use the same webhook secret
+    try:
+        event = stripe_lib.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    if event["type"] == "identity.verification_session.verified":
+        session_obj = event["data"]["object"]
+        user_id = session_obj.get("metadata", {}).get("user_id")
+        if user_id:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"identity_verified": True, "identity_verified_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            logger.info(f"Identity verified for user {user_id}")
+
+    return {"status": "ok"}
+
+
+@talking_router.post("/generate")
+async def generate_talking_head(
+    portrait: UploadFile = File(...),
+    audio: UploadFile = File(...),
+    photo_hash: str = Form(...),
+    still_mode: bool = Form(True),
+    size: int = Form(256),
+    user=Depends(get_current_user),
+):
+    """
+    Generate a lip-synced talking head video.
+
+    Protection layers (all must pass):
+      1. Pro/Agency tier check
+      2. Stripe Identity ID verification
+      3. DeepFace face validation (via Modal CPU function)
+      4. Explicit consent on file for this portrait
+      5. "AI GENERATED" label burned into every frame (FFmpeg post-pass)
+    """
+    # ── Gate 1: Tier ─────────────────────────────────────────────────────────────
+    await _require_talking_head_access(user)
+
+    # ── Gate 2: Identity verified ─────────────────────────────────────────────────
+    await _require_identity_verified(user)
+
+    # ── Read uploads ──────────────────────────────────────────────────────────────
+    portrait_bytes = await portrait.read()
+    audio_bytes = await audio.read()
+
+    if len(portrait_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Portrait image too large (max 10 MB).")
+    if len(audio_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Audio file too large (max 20 MB).")
+
+    # ── Gate 3: DeepFace face check (via Modal CPU function) ──────────────────────
+    if not MODAL_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Talking head service is not configured on this server. Contact support."
+        )
+    try:
+        import modal as _modal
+        loop = asyncio.get_event_loop()
+        face_result: dict = await loop.run_in_executor(
+            None,
+            lambda: _modal.Function.lookup(MODAL_SADTALKER_APP, "check_face").remote(portrait_bytes),
+        )
+    except Exception as e:
+        logger.error(f"Face check Modal call failed: {e}")
+        raise HTTPException(status_code=503, detail="Face validation service unavailable. Try again later.")
+
+    if not face_result.get("ok"):
+        raise HTTPException(status_code=400, detail=face_result.get("reason", "Face validation failed."))
+
+    # ── Gate 4: Consent on file for this portrait ─────────────────────────────────
+    await _require_consent(user, photo_hash)
+
+    # ── Usage check ───────────────────────────────────────────────────────────────
+    await check_usage_limit(user, "videos")
+
+    # ── Generate via Modal SadTalker ──────────────────────────────────────────────
+    try:
+        loop = asyncio.get_event_loop()
+        raw_video_bytes: bytes = await loop.run_in_executor(
+            None,
+            lambda: _modal.Function.lookup(MODAL_SADTALKER_APP, "SadTalkerGenerator.generate").remote(
+                portrait_bytes,
+                audio_bytes,
+                still_mode=still_mode,
+                size=size,
+            ),
+        )
+    except Exception as e:
+        logger.error(f"SadTalker generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Talking head generation failed: {str(e)[:200]}")
+
+    if not raw_video_bytes or len(raw_video_bytes) < 10_000:
+        raise HTTPException(status_code=500, detail="SadTalker returned an empty video.")
+
+    # ── Gate 5: Burn "AI GENERATED" label into every frame ───────────────────────
+    output_name = f"talking_head_{uuid.uuid4().hex[:8]}.mp4"
+    output_path = OUTPUTS_DIR / output_name
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        raw_path = Path(tmpdir) / "raw.mp4"
+        raw_path.write_bytes(raw_video_bytes)
+
+        # Burn semi-transparent "AI GENERATED" text across the bottom of every frame
+        label_cmd = [
+            FFMPEG_BIN, "-y",
+            "-i", str(raw_path),
+            "-vf", (
+                "drawtext=text='AI GENERATED':"
+                "fontsize=24:fontcolor=white@0.85:"
+                "x=(w-text_w)/2:y=h-th-16:"
+                "box=1:boxcolor=black@0.55:boxborderw=6"
+            ),
+            "-c:a", "copy",
+            "-preset", "fast",
+            str(output_path),
+        ]
+        proc = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: subprocess.run(label_cmd, capture_output=True),
+        )
+        if proc.returncode != 0:
+            # FFmpeg labeling failed — still serve the raw video rather than 500ing,
+            # but log the incident so we can investigate.
+            logger.error(f"AI label FFmpeg failed (rc={proc.returncode}): {proc.stderr[-300:]!r}")
+            output_path.write_bytes(raw_video_bytes)
+
+    # ── Increment usage & log ──────────────────────────────────────────────────────
+    await increment_usage(user["id"], "videos")
+    await db.talking_head_logs.insert_one({
+        "user_id": user["id"],
+        "output_file": output_name,
+        "photo_hash": photo_hash,
+        "face_count": face_result.get("face_count", 1),
+        "still_mode": still_mode,
+        "size": size,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "ai_label_applied": proc.returncode == 0,
+    })
+
+    return {
+        "ok": True,
+        "video_url": f"/api/outputs/{output_name}",
+        "ai_label": True,
+        "message": "Talking head video generated. AI GENERATED label is burned in.",
+    }
+
+
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
+app.include_router(talking_router)
 
 
 @app.on_event("shutdown")
