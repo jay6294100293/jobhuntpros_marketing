@@ -225,37 +225,41 @@ Permanent account ban on violation.
 
 ## Build Roadmap
 
-### Phase 1 — Free Tier Quality (implement first, no GPU needed)
-1. Edge TTS neural voice — 2 hours, biggest perceived quality jump, $0 cost
-2. Proper Pillow slide design system — 1 day, 6 structured templates
-3. Crossfade transitions (FFmpeg xfade) — 2 hours
-4. Background music bed — 1 day (bundle royalty-free tracks)
-5. Watermark in design (not corner) — 2 hours
+### Phase 1 — Free Tier Quality ✅ COMPLETE
+1. ~~Edge TTS neural voice~~ ✅ — Microsoft AndrewNeural, $0, sounds human
+2. ~~Proper Pillow slide design system~~ ✅ — 6 structured templates (Hero, Problem, Solution, Features, How It Works, CTA) with brand color gradients, typography hierarchy, shape-drawn checkmarks
+3. ~~Crossfade transitions (FFmpeg xfade)~~ ✅ — 0.5s fade between slides, proper duration math
+4. ~~Watermark in design (not corner)~~ ✅ — diagonal RGBA stamps burned into slide content area
+5. Background music bed — still todo (bundle royalty-free tracks)
 
-### Phase 2 — Monetization
-1. Stripe subscription integration (already partially in code)
-2. Generation limits enforcement per tier
-3. 3-lifetime-gen limit for free users
-4. Upgrade prompts at generation limit
+### Phase 2 — Monetization ✅ COMPLETE (pending activation)
+1. ~~Stripe subscription integration~~ ✅ — /checkout/starter, /checkout/pro, /checkout/agency
+2. ~~Generation limits enforcement per tier~~ ✅ — TIER_CONFIG, check_usage_limit()
+3. ~~3-lifetime-gen limit for free users~~ ✅ — aggregate across all months
+4. ~~Upgrade prompts at generation limit~~ ✅ — HTTP 429 with upgrade message
+5. **To activate**: add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_*_PRICE_ID to secrets file
 
-### Phase 3 — Pro Tier GPU
-1. Modal.com account + deployment
-2. LTX-Video endpoint on Modal (Apache 2.0)
-3. Route pro users to Modal for video backgrounds
-4. Keep FFmpeg slideshow for free tier
+### Phase 3 — Pro Tier GPU ✅ COMPLETE (pending activation)
+1. ~~Modal.com account + deployment~~ ✅ — backend/modal_video.py ready
+2. ~~LTX-Video endpoint on Modal (Apache 2.0)~~ ✅ — A100-40GB, ~$0.44/video
+3. ~~Route pro users to Modal for video backgrounds~~ ✅ — best-effort, falls back to slideshow
+4. ~~Keep FFmpeg slideshow for free tier~~ ✅ — MODAL_ENABLED flag gates all GPU calls
+5. **To activate**: add MODAL_TOKEN_ID + MODAL_TOKEN_SECRET, run `modal deploy backend/modal_video.py`
 
-### Phase 4 — Talking Head
-1. Stripe Identity ID verification gate
-2. SadTalker endpoint on Modal
-3. DeepFace check on photo upload
-4. AI Generated label on all talking head videos
-5. Pre-made animated characters for free/starter
+### Phase 4 — Talking Head ✅ COMPLETE (pending Modal deploy)
+1. ~~Stripe Identity ID verification gate~~ ✅ — POST /api/talking-head/verify-identity, webhook sets identity_verified
+2. ~~SadTalker endpoint on Modal~~ ✅ — backend/modal_sadtalker.py, A10G GPU
+3. ~~DeepFace check on photo upload~~ ✅ — check_face() Modal CPU function, RetinaFace detector
+4. ~~AI Generated label on all talking head videos~~ ✅ — FFmpeg drawtext burned into every frame
+5. ~~Explicit consent timestamped in DB~~ ✅ — POST /api/talking-head/consent, photo_hash keyed
+6. **To activate**: run `modal deploy backend/modal_sadtalker.py`
 
-### Phase 5 — Scale
-1. AppSumo LTD launch (after Phase 1-2 complete, product looks good)
-2. Agency tier + white label
+### Phase 5 — Scale (next)
+1. **AppSumo LTD launch** — activate Stripe + Modal first so product is fully live
+2. Agency tier white label — remove SwiftPack AI branding for agency accounts
 3. API access for agencies
-4. Consider annual deals with agencies
+4. Background music bed (royalty-free tracks bundled in repo)
+5. Annual pricing discounts (20% off)
 
 ---
 

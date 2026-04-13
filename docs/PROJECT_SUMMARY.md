@@ -18,23 +18,36 @@ SwiftPack AI turns any product URL into a complete marketing launch pack in 90 s
 
 ## Current State (April 2026)
 
-**Working in production:**
+**Working in production (Priorities 1–7 complete):**
 - Magic Button full pipeline (scrape → scripts → videos → posters)
 - JWT authentication + beta agreement gate
-- Image slideshow videos with Ken Burns zoom/pan (replaced solid color)
-- Edge TTS / gTTS voiceover
-- Gemini 2.5 Flash script generation
-- Pillow poster generation
-- Docker Compose deployment on EC2 (swiftpackai.tech)
-- SSL via Let's Encrypt
-- Login enforcement (all routes protected)
 - Invite-only registration (admin creates users via API)
+- **Edge TTS** — Microsoft AndrewNeural voice (Priority 1, replaces gTTS)
+- **Pillow slide design system** — 6 structured marketing templates (Priority 2):
+  - Hero, Problem, Solution, Features (checkmarks), How It Works, CTA
+  - Brand color gradients, typography hierarchy, decorative shapes
+- **Crossfade transitions** — FFmpeg xfade filter between slides, 0.5s fade (Priority 3)
+- **Watermark** — diagonal "SwiftPack AI" stamps burned into slide content area, 30% opacity, RGBA compositing (Priority 4)
+- **Stripe subscription tiers** — Free/Starter/Pro/Agency with usage enforcement (Priority 5):
+  - Free: 3 lifetime videos, watermarked, 9:16 only
+  - Starter $19/mo: 15 videos, no watermark, all formats
+  - Pro $49/mo: 50 videos, talking head, priority queue
+  - Agency $149/mo: 200 videos, team seats, white label
+- **Modal + LTX-Video** — serverless A100 GPU for Pro/Agency tier (Priority 6):
+  - `backend/modal_video.py` deploys `swiftpack-ltx-video` app
+  - Free tier falls back to FFmpeg slideshow automatically
+- **SadTalker talking head** — portrait photo → lip-synced video (Priority 7):
+  - `backend/modal_sadtalker.py` deploys `swiftpack-sadtalker` on A10G GPU
+  - 5-layer protection: tier gate, Stripe Identity, DeepFace, consent, "AI GENERATED" label
+  - All endpoints live: `/api/talking-head/consent`, `/api/talking-head/verify-identity`, `/api/talking-head/generate`
+- Docker Compose deployment on EC2 (swiftpackai.tech)
+- SSL via Let's Encrypt + Nginx reverse proxy
+- Rate limiting (in-process per-route limits)
 
-**Known limitations:**
-- Voice is gTTS (robotic) — needs Edge TTS upgrade
-- Slides are gradient fallback (example.com has no images)
-- No subscription billing active yet
-- No talking head feature yet
+**Pending activation (code ready, needs env vars):**
+- Modal GPU (needs `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` in secrets file)
+- Stripe billing (needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs)
+- SadTalker (needs Modal deployed: `modal deploy backend/modal_sadtalker.py`)
 
 ---
 
@@ -45,17 +58,18 @@ Backend:    FastAPI (Python 3.11) — server.py is entire backend
 Frontend:   React 19 + Tailwind CSS 3.4 + React Router DOM 7.5.1
 Database:   MongoDB (Motor async driver) — resilient, works without it
 AI/LLM:     Google Gemini 2.5 Flash (google-genai SDK)
-TTS:        gTTS (current) → Edge TTS (planned upgrade)
-Video:      FFmpeg + Pillow (CPU, no GPU)
+TTS:        Edge TTS — Microsoft AndrewNeural voice (free, no API key)
+Video:      FFmpeg + Pillow (CPU) → Modal A100/A10G GPU for Pro tier
 Scraping:   BeautifulSoup4 + httpx (verify=False for SSL)
 Auth:       JWT (jose) + bcrypt + beta agreement modal
-Payments:   Stripe (in code, not yet active)
+Payments:   Stripe subscriptions + Stripe Identity (code complete, needs activation)
+GPU:        Modal.com — LTX-Video (A100-40GB), SadTalker (A10G)
 Ports:      Backend 8001, Frontend 3000
 Proxy:      Nginx (SSL termination + reverse proxy)
 Deploy:     Docker Compose (4 containers: mongo, backend, frontend, nginx)
 Server:     AWS EC2 (ubuntu@99.79.39.115)
 Repo path:  /home/ubuntu/swiftpack
-SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads)
+SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads or E:\secrets\)
 ```
 
 ---
@@ -64,19 +78,15 @@ SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads)
 
 ```
 POST /api/magic-button
-  1. scrape_url()           → brand colors, headline, features, images[]
-  2. generate_script(PAS)   → ad script via Gemini
-  3. generate_script(Step)  → tutorial script via Gemini
-  4. create_complete_video() → 9:16 ad video
-     - Download scraped images OR generate gradient slides (Pillow)
-     - Ken Burns zoompan per image
-     - Edge TTS / gTTS voiceover
-     - Drawtext captions with box background
-     - Progress bar (drawbox dynamic width)
-     - FFmpeg render
-  5. create_complete_video() → 16:9 tutorial video (same pipeline)
-  6. create_poster()        → 1:1 social poster
-  7. create_poster()        → 9:16 social poster
+  1. scrape_url()             → brand colors, headline, features, images[]
+  2. generate_script(PAS)     → ad script via Gemini
+  3. generate_script(Step)    → tutorial script via Gemini
+  4. create_complete_video()  → 9:16 ad video
+     ├── Free tier:   Pillow 6-slide design system + xfade + Edge TTS + watermark
+     └── Pro/Agency:  Modal LTX-Video AI clip → FFmpeg loop + captions (fallback: slideshow)
+  5. create_complete_video()  → 16:9 tutorial video (same pipeline)
+  6. create_poster()          → 1:1 social poster
+  7. create_poster()          → 9:16 social poster
 ```
 
 ---
@@ -84,8 +94,10 @@ POST /api/magic-button
 ## Key Files
 
 ```
-backend/server.py              Main FastAPI backend (entire app)
-backend/requirements.txt       Python dependencies
+backend/server.py              Main FastAPI backend (entire app — ~2700 lines)
+backend/modal_video.py         Modal LTX-Video serverless GPU app (Priority 6)
+backend/modal_sadtalker.py     Modal SadTalker talking head GPU app (Priority 7)
+backend/requirements.txt       Python dependencies (includes modal>=0.64.0)
 backend/.env                   Local env vars (gitignored)
 frontend/src/App.js            React routing + auth gate
 frontend/src/components/
@@ -93,7 +105,7 @@ frontend/src/components/
   auth/Login.js                Login page (invite-only message)
   auth/BetaAgreementModal.js   Beta agreement gate
   Layout.js                    Nav wrapper
-docker-compose.prod.yml        Production Docker Compose
+docker-compose.yml             Production Docker Compose
 nginx.prod.conf                Nginx SSL + proxy config
 docs/PRODUCT_STRATEGY.md       Business model, pricing, roadmap
 docs/PROJECT_SUMMARY.md        This file
@@ -108,14 +120,26 @@ docs/PROJECT_SUMMARY.md        This file
 # E:/secrets/swiftpack.env (local Windows dev)
 
 MONGO_URL=mongodb://mongo:27017
-DB_NAME=jobhuntpro_db
+DB_NAME=swiftpackai_db
 CORS_ORIGINS=https://swiftpackai.tech,https://www.swiftpackai.tech
+BACKEND_URL=https://swiftpackai.tech
+FRONTEND_URL=https://swiftpackai.tech
 GEMINI_API_KEY=...
 JWT_SECRET=...
-GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/tts-key.json
+ADMIN_SECRET=...
+
+# Stripe (activate when ready)
 STRIPE_SECRET_KEY=...
 STRIPE_WEBHOOK_SECRET=...
+STRIPE_STARTER_PRICE_ID=...
 STRIPE_PRO_PRICE_ID=...
+STRIPE_AGENCY_PRICE_ID=...
+
+# Modal GPU (activate when ready)
+MODAL_TOKEN_ID=...
+MODAL_TOKEN_SECRET=...
+MODAL_APP_NAME=swiftpack-ltx-video          # default
+MODAL_SADTALKER_APP=swiftpack-sadtalker     # default
 ```
 
 ---
@@ -128,20 +152,24 @@ ssh -i ~/Downloads/novajaytechserver_testing-key.pem ubuntu@99.79.39.115
 
 # Pull + rebuild backend
 cd /home/ubuntu/swiftpack
-git pull origin main
-docker compose -f docker-compose.prod.yml build backend
-docker compose -f docker-compose.prod.yml up -d backend
+git pull
+docker compose build backend
+docker compose up -d backend
+
+# After backend container restart, nginx may lose upstream — restart it
+docker restart swiftpack-nginx-1
 
 # Pull + rebuild frontend
-docker compose -f docker-compose.prod.yml build frontend
-docker compose -f docker-compose.prod.yml up -d frontend
+docker compose build frontend
+docker compose up -d frontend
 
 # Check logs
 docker logs swiftpack-backend-1 --tail=50
 docker logs swiftpack-frontend-1 --tail=20
 
-# Check all containers
-docker compose -f docker-compose.prod.yml ps
+# Deploy Modal apps (run once, re-run after changes)
+modal deploy backend/modal_video.py
+modal deploy backend/modal_sadtalker.py
 ```
 
 ---
@@ -159,42 +187,44 @@ curl -X POST https://swiftpackai.tech/api/auth/register \
 ## Cost Breakdown
 
 ```
-Current monthly infra:
+Current monthly infra (no GPU active):
   EC2 (t3.micro):  ~$10-20/month
   MongoDB:         $0 (self-hosted in Docker)
-  Gemini API:      $0 (within free tier)
-  gTTS:            $0
+  Gemini API:      $0 (within free tier for current volume)
+  Edge TTS:        $0 (Microsoft free, no API key)
   Total:           ~$10-20/month
 
-Planned (with Modal GPU for Pro tier):
+With Modal GPU active (Pro/Agency tier):
   EC2:             ~$20/month
-  Modal (GPU):     ~$0.65/generation (pay per use, $0 when idle)
-  At 500 pro gens/month: ~$325 GPU + $20 EC2 = $345/month
-  Pro revenue at 500 gens: ~$490+/month → still profitable
+  LTX-Video:       ~$0.44/generation on A100 (pay per second, $0 idle)
+  SadTalker:       ~$0.10/generation on A10G
+  At 500 pro gens: ~$270 GPU + $20 EC2 = $290/month
+  Pro revenue (50 users × $49): $2,450/month → very profitable
 ```
 
 ---
 
 ## What's Next (Priority Order)
 
-See `docs/PRODUCT_STRATEGY.md` for full roadmap. Short version:
+See `docs/PRODUCT_STRATEGY.md` for full strategy.
 
-1. **Edge TTS** — replace gTTS with neural voice (free, huge quality jump)
-2. **Pillow slide design system** — 6 structured templates, real design
-3. **Crossfade transitions** — FFmpeg xfade filter
-4. **Watermark in slide design** — not corner, burned into content
-5. **Stripe subscription enforcement** — free 3-gen limit, paid tiers
-6. **Modal + LTX-Video** — real AI backgrounds for Pro tier
-7. **SadTalker talking head** — Pro feature, behind ID verification
-8. **AppSumo LTD launch** — after quality is solid
+1. ~~Edge TTS~~ ✅ Done
+2. ~~Pillow slide design system~~ ✅ Done
+3. ~~Crossfade transitions~~ ✅ Done
+4. ~~Watermark in slide design~~ ✅ Done
+5. ~~Stripe subscription enforcement~~ ✅ Done (needs activation)
+6. ~~Modal + LTX-Video~~ ✅ Done (needs Modal token)
+7. ~~SadTalker talking head~~ ✅ Done (needs Modal deploy)
+8. **AppSumo LTD launch** — next priority after activating Stripe + Modal
 
 ---
 
 ## Known Issues / Decisions
 
+- After backend container restart, nginx loses upstream — always `docker restart swiftpack-nginx-1`
 - MongoDB writes silently skipped if unavailable (content still generates)
 - httpx uses verify=False for scraping (SSL cert issues on some sites)
-- gTTS is robotic — Edge TTS is the fix
 - GTX 1080 Ti is reserved for Mother AI — NEVER route SwiftPack traffic to it
 - Playwright/Chromium too heavy for EC2 t3.micro — don't install on server
-- No deepfake protection yet — must be added before talking head goes live
+- Modal GPU not active until `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` set in secrets file
+- Stripe billing not active until price IDs and keys added to secrets file
