@@ -1,30 +1,49 @@
 #!/bin/bash
+# =============================================================================
+# SwiftPack AI — Auto-Deploy
+# Runs every 5 minutes via cron on the EC2 server.
+# Checks for new commits on main; deploys if found.
+# =============================================================================
+set -euo pipefail
 
-REPO_DIR="/home/ubuntu/swiftpack"
+REPO_DIR="/home/ubuntu/swiftpackai"
 BRANCH="main"
 LOG_FILE="/home/ubuntu/logs/swiftpack-deploy.log"
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE="/home/ubuntu/secrets/swiftpack.env"
 
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"; }
+
 mkdir -p /home/ubuntu/logs
 
-cd $REPO_DIR || exit 1
+cd "$REPO_DIR" || exit 1
 
-GIT_SSH_COMMAND="ssh -i /home/ubuntu/.ssh/swiftpack_deploy_key -o StrictHostKeyChecking=no" git fetch origin $BRANCH >> $LOG_FILE 2>&1
+git fetch origin "$BRANCH" >> "$LOG_FILE" 2>&1
 
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/$BRANCH)
+REMOTE=$(git rev-parse "origin/$BRANCH")
 
 if [ "$LOCAL" = "$REMOTE" ]; then
-    exit 0
+    exit 0  # Nothing new — stay quiet
 fi
 
-echo "$(date) — New commit detected. Deploying SwiftPack AI..." >> $LOG_FILE
+log "New commit detected: $LOCAL → $REMOTE"
+log "Deploying SwiftPack AI..."
 
-GIT_SSH_COMMAND="ssh -i /home/ubuntu/.ssh/swiftpack_deploy_key -o StrictHostKeyChecking=no" git pull origin $BRANCH >> $LOG_FILE 2>&1
+git reset --hard "origin/$BRANCH" >> "$LOG_FILE" 2>&1
+log "Now at commit: $(git rev-parse --short HEAD)"
 
-ENV_FILE=$ENV_FILE docker-compose -f $COMPOSE_FILE down >> $LOG_FILE 2>&1
-ENV_FILE=$ENV_FILE docker-compose -f $COMPOSE_FILE up -d --build >> $LOG_FILE 2>&1
-docker system prune -f >> $LOG_FILE 2>&1
+# Zero-downtime: build then swap (no down)
+ENV_FILE="$ENV_FILE" docker compose -f "$COMPOSE_FILE" build backend >> "$LOG_FILE" 2>&1
+ENV_FILE="$ENV_FILE" docker compose -f "$COMPOSE_FILE" up -d --no-deps backend >> "$LOG_FILE" 2>&1
 
-echo "$(date) — SwiftPack AI deploy complete." >> $LOG_FILE
+sleep 5
+
+# Health check
+if curl -sf --max-time 10 http://localhost:8001/api/ > /dev/null 2>&1; then
+    log "Health check passed. Deploy complete."
+else
+    log "WARNING: Health check failed after deploy. Check container logs."
+fi
+
+docker image prune -f >> "$LOG_FILE" 2>&1

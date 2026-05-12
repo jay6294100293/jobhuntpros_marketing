@@ -257,7 +257,7 @@ Mother monitors Content Studio via:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jobhuntpro_marketing** (818 symbols, 1749 relationships, 41 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jobhuntpro_marketing** (1075 symbols, 2640 relationships, 50 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
