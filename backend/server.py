@@ -58,6 +58,17 @@ for _sc in _SECRETS_CANDIDATES:
 # touching the shared secrets file. Already gitignored.
 load_dotenv(ROOT_DIR / '.env', override=False)
 
+# ── Sentry (error tracking) ────────────────────────────────────────────────────
+import sentry_sdk as _sentry_sdk
+_SENTRY_DSN = os.getenv("SENTRY_DSN")
+if _SENTRY_DSN:
+    _sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        traces_sample_rate=0.1,
+        environment=os.getenv("ENVIRONMENT", "development"),
+        release=os.getenv("SENTRY_RELEASE", "swiftpack@1.0.0"),
+    )
+
 # ── FFmpeg path detection ──────────────────────────────────────────────────────
 # Check common portable locations first, then fall back to PATH
 _FFMPEG_CANDIDATES = [
@@ -127,11 +138,38 @@ OUTPUTS_DIR = ROOT_DIR / 'outputs'
 UPLOADS_DIR.mkdir(exist_ok=True)
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
+# Background music beds — royalty-free .mp3 files dropped into this folder.
+# If empty, music is simply skipped (safe for all tiers).
+MUSIC_BEDS_DIR = ROOT_DIR / 'assets' / 'music_beds'
+MUSIC_BEDS_DIR.mkdir(parents=True, exist_ok=True)
+
 # ── Gemini ─────────────────────────────────────────────────────────────────────
 gemini_key = os.getenv('GEMINI_API_KEY')
 _gemini_ready = bool(gemini_key and gemini_key != 'your-gemini-api-key-here')
+
+# ── Helicone AI observability proxy ───────────────────────────────────────────
+# When HELICONE_API_KEY is set, all Gemini calls are routed through the Helicone
+# gateway for cost tracking, token usage, and latency dashboards.
+# Self-hosted Helicone: set HELICONE_HOST to your own gateway URL.
+_helicone_api_key = os.getenv('HELICONE_API_KEY', '')
+_helicone_host = os.getenv('HELICONE_HOST', 'https://gateway.helicone.ai')
+
 if _gemini_ready:
-    _gemini_client = genai.Client(api_key=gemini_key)
+    if _helicone_api_key:
+        # Route through Helicone proxy — preserves full google-genai SDK compatibility
+        _gemini_client = genai.Client(
+            api_key=gemini_key,
+            http_options={
+                'base_url': f'{_helicone_host.rstrip("/")}/gemini',
+                'headers': {
+                    'Helicone-Auth': f'Bearer {_helicone_api_key}',
+                    'Helicone-Property-App': 'swiftpack',
+                    'Helicone-Property-Environment': os.getenv('ENVIRONMENT', 'development'),
+                },
+            },
+        )
+    else:
+        _gemini_client = genai.Client(api_key=gemini_key)
 else:
     _gemini_client = None  # will trigger fallbacks / clear errors
 
@@ -1112,6 +1150,59 @@ async def _generate_modal_clip(
         return None
 
 
+def _get_random_music_bed() -> Optional[str]:
+    """
+    Return a random .mp3 from MUSIC_BEDS_DIR, or None if folder is empty.
+    Drop royalty-free tracks into backend/assets/music_beds/ to enable.
+    """
+    try:
+        beds = list(MUSIC_BEDS_DIR.glob("*.mp3")) + list(MUSIC_BEDS_DIR.glob("*.m4a"))
+        if not beds:
+            return None
+        import random
+        return str(random.choice(beds))
+    except Exception:
+        return None
+
+
+async def _mix_audio_with_music_bed(
+    voice_path: str,
+    music_path: str,
+    output_path: str,
+    target_duration: float,
+) -> bool:
+    """
+    Mix TTS voiceover with a looped background music bed using FFmpeg amix.
+    Music is ducked to -18 dB relative to voice (volume=0.12).
+    Returns True if the mixed file was created successfully.
+    """
+    # Loop music bed to cover the full video duration, then mix:
+    #   Input 0: TTS voice  (weight 1.0)
+    #   Input 1: music bed  (weight 0.12 → approx -18 dB)
+    cmd = (
+        f'"{FFMPEG_BIN}"'
+        f' -i "{voice_path}"'
+        f' -stream_loop -1 -i "{music_path}"'
+        f' -filter_complex "'
+        f'[0:a]volume=1.0[voice];'
+        f'[1:a]volume=0.12[music];'
+        f'[voice][music]amix=inputs=2:duration=first:dropout_transition=2[aout]'
+        f'"'
+        f' -map "[aout]" -t {target_duration:.3f}'
+        f' -c:a aac -b:a 192k -ar 44100 -y "{output_path}"'
+    )
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+    )
+    if result.returncode == 0 and Path(output_path).exists() and Path(output_path).stat().st_size > 1000:
+        logger.info("Music bed mixed successfully.")
+        return True
+    logger.warning(f"Music bed mix failed: {result.stderr[-200:]}")
+    return False
+
+
 def _ffmpeg_loop_clip_with_audio(
     clip_path: str,
     sentences: List[str],
@@ -1781,6 +1872,23 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
 
     local_images = combined
     total_duration = len(local_images) * 3.0  # 3s per slide
+
+    # ── Background music bed (paid tiers only) ────────────────────────────────
+    # Starter / Pro / Agency get a subtle music bed mixed under the voiceover.
+    # Free tier gets raw TTS only (no music).
+    # If no .mp3 files are in assets/music_beds/ the step is silently skipped.
+    if audio_path and user_tier in ("starter", "pro", "agency"):
+        music_bed = _get_random_music_bed()
+        if music_bed:
+            mixed_audio_path = str(OUTPUTS_DIR / f"{video_id}_mixed_audio.mp3")
+            try:
+                mixed_ok = await _mix_audio_with_music_bed(
+                    audio_path, music_bed, mixed_audio_path, total_duration
+                )
+                if mixed_ok:
+                    audio_path = mixed_audio_path
+            except Exception as _mix_err:
+                logger.warning(f"Music bed skipped (mixing error): {_mix_err}")
 
     # ── Pro/Agency: try Modal LTX-Video GPU ──────────────────────────────────
     # Build a rich visual prompt from the product name + script

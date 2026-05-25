@@ -1,5 +1,5 @@
 # SwiftPack AI — Product Strategy & Business Model
-# Last updated: April 2026 (source of truth for all sessions)
+# Last updated: May 2026 (source of truth for all sessions)
 
 ---
 
@@ -27,12 +27,12 @@ One click on any product URL produces:
 - gTTS voice (robotic — needs replacing)
 - Scraped website images when available
 
-### Near-term target (free tier quality)
-- Edge TTS neural voice (sounds human, free, no API key)
-- Proper Pillow-designed slide system (6 structured slides, not random captions)
-- Crossfade transitions between slides (FFmpeg xfade)
-- Watermark burned into slide design (not corner — can't be cropped)
-- Background music bed (royalty-free tracks bundled in repo)
+### Near-term target (free tier quality) — ✅ ALL COMPLETE
+- ~~Edge TTS neural voice~~ ✅ Microsoft AndrewNeural, free, sounds human
+- ~~Proper Pillow-designed slide system~~ ✅ 6 structured templates (Hero, Problem, Solution, Features, How It Works, CTA)
+- ~~Crossfade transitions~~ ✅ FFmpeg xfade, 0.5s between slides
+- ~~Watermark burned into slide design~~ ✅ diagonal RGBA stamps, content area
+- ~~Background music bed~~ ✅ FFmpeg amix, royalty-free .mp3, ducked -18dB under voice (paid tiers only)
 
 ### Pro tier target (GPU-powered via Modal.com)
 - LTX-Video (Lightricks, Apache 2.0) — real AI video backgrounds
@@ -230,7 +230,7 @@ Permanent account ban on violation.
 2. ~~Proper Pillow slide design system~~ ✅ — 6 structured templates (Hero, Problem, Solution, Features, How It Works, CTA) with brand color gradients, typography hierarchy, shape-drawn checkmarks
 3. ~~Crossfade transitions (FFmpeg xfade)~~ ✅ — 0.5s fade between slides, proper duration math
 4. ~~Watermark in design (not corner)~~ ✅ — diagonal RGBA stamps burned into slide content area
-5. Background music bed — still todo (bundle royalty-free tracks)
+5. ~~Background music bed~~ ✅ — FFmpeg amix, -18dB duck, paid tiers only; activate by dropping .mp3 into `backend/assets/music_beds/`
 
 ### Phase 2 — Monetization ✅ COMPLETE (pending activation)
 1. ~~Stripe subscription integration~~ ✅ — /checkout/starter, /checkout/pro, /checkout/agency
@@ -258,7 +258,7 @@ Permanent account ban on violation.
 1. **AppSumo LTD launch** — activate Stripe + Modal first so product is fully live
 2. Agency tier white label — remove SwiftPack AI branding for agency accounts
 3. API access for agencies
-4. Background music bed (royalty-free tracks bundled in repo)
+4. ~~Background music bed~~ ✅ Done — needs royalty-free .mp3 files populated
 5. Annual pricing discounts (20% off)
 
 ---

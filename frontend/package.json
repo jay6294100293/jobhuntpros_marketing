@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@sentry/react": "^8.0.0",
+    "posthog-js": "^1.187.0",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/outfit": "^5.2.8",

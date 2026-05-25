@@ -1,5 +1,5 @@
 # SwiftPack AI — Project Summary
-# Last updated: April 2026
+# Last updated: May 2026
 
 ---
 
@@ -16,23 +16,29 @@ SwiftPack AI turns any product URL into a complete marketing launch pack in 90 s
 
 ---
 
-## Current State (April 2026)
+## Current State (May 2026)
 
-**Working in production (Priorities 1–7 complete):**
+**100% code-complete. All 8 priorities implemented.**
+
+**Working in production (Priorities 1–8 complete):**
 - Magic Button full pipeline (scrape → scripts → videos → posters)
-- JWT authentication + beta agreement gate
-- Invite-only registration (admin creates users via API)
+- JWT authentication
+- **Open public registration** — `POST /api/auth/register` (password + confirm fields, auto-login on success)
 - **Edge TTS** — Microsoft AndrewNeural voice (Priority 1, replaces gTTS)
 - **Pillow slide design system** — 6 structured marketing templates (Priority 2):
   - Hero, Problem, Solution, Features (checkmarks), How It Works, CTA
   - Brand color gradients, typography hierarchy, decorative shapes
 - **Crossfade transitions** — FFmpeg xfade filter between slides, 0.5s fade (Priority 3)
 - **Watermark** — diagonal "SwiftPack AI" stamps burned into slide content area, 30% opacity, RGBA compositing (Priority 4)
+- **Background music bed** — FFmpeg amix filter, royalty-free .mp3 from `assets/music_beds/`, music ducked to -18 dB (Priority 4.5):
+  - Starter/Pro/Agency tiers get music bed under voiceover
+  - Free tier gets raw TTS only
+  - Drop any .mp3 into `backend/assets/music_beds/` to activate; folder empty = silently skipped
 - **Stripe subscription tiers** — Free/Starter/Pro/Agency with usage enforcement (Priority 5):
   - Free: 3 lifetime videos, watermarked, 9:16 only
-  - Starter $19/mo: 15 videos, no watermark, all formats
-  - Pro $49/mo: 50 videos, talking head, priority queue
-  - Agency $149/mo: 200 videos, team seats, white label
+  - Starter $19/mo: 15 videos, no watermark, all formats + music bed
+  - Pro $49/mo: 50 videos, talking head, priority queue + music bed
+  - Agency $149/mo: 200 videos, team seats, white label + music bed
 - **Modal + LTX-Video** — serverless A100 GPU for Pro/Agency tier (Priority 6):
   - `backend/modal_video.py` deploys `swiftpack-ltx-video` app
   - Free tier falls back to FFmpeg slideshow automatically
@@ -48,6 +54,7 @@ SwiftPack AI turns any product URL into a complete marketing launch pack in 90 s
 - Modal GPU (needs `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` in secrets file)
 - Stripe billing (needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs)
 - SadTalker (needs Modal deployed: `modal deploy backend/modal_sadtalker.py`)
+- Music bed (needs royalty-free .mp3 files dropped into `backend/assets/music_beds/`)
 
 ---
 
@@ -102,7 +109,8 @@ backend/.env                   Local env vars (gitignored)
 frontend/src/App.js            React routing + auth gate
 frontend/src/components/
   Dashboard.js                 Magic Button UI + progress bar
-  auth/Login.js                Login page (invite-only message)
+  auth/Login.js                Login page
+  auth/Register.js             Open public registration (password + confirm, auto-login)
   auth/BetaAgreementModal.js   Beta agreement gate
   Layout.js                    Nav wrapper
 docker-compose.yml             Production Docker Compose
@@ -212,10 +220,12 @@ See `docs/PRODUCT_STRATEGY.md` for full strategy.
 2. ~~Pillow slide design system~~ ✅ Done
 3. ~~Crossfade transitions~~ ✅ Done
 4. ~~Watermark in slide design~~ ✅ Done
+4.5. ~~Background music bed~~ ✅ Done (needs royalty-free .mp3 files in `backend/assets/music_beds/`)
 5. ~~Stripe subscription enforcement~~ ✅ Done (needs activation)
 6. ~~Modal + LTX-Video~~ ✅ Done (needs Modal token)
 7. ~~SadTalker talking head~~ ✅ Done (needs Modal deploy)
-8. **AppSumo LTD launch** — next priority after activating Stripe + Modal
+8. ~~Open public registration~~ ✅ Done
+9. **AppSumo LTD launch** — next priority after activating Stripe + Modal
 
 ---
 
@@ -228,3 +238,4 @@ See `docs/PRODUCT_STRATEGY.md` for full strategy.
 - Playwright/Chromium too heavy for EC2 t3.micro — don't install on server
 - Modal GPU not active until `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` set in secrets file
 - Stripe billing not active until price IDs and keys added to secrets file
+- Music beds folder `backend/assets/music_beds/` is empty by default — drop royalty-free `.mp3` files to activate; Pixabay, Free Music Archive, or ccMixter are good sources
