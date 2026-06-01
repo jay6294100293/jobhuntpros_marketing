@@ -85,7 +85,7 @@ export function Landing() {
       name: 'Free',
       price: '0',
       desc: 'Try SwiftPack with no commitment.',
-      features: ['3 launch packs lifetime', '9:16 TikTok format only', 'SwiftPack watermark', 'Basic slideshow video'],
+      features: ['3 videos lifetime', '5 scripts lifetime', '9:16 format only', 'SwiftPack watermark'],
       cta: 'Start free',
       featured: false,
     },
@@ -93,7 +93,7 @@ export function Landing() {
       name: 'Starter',
       price: '19',
       desc: 'For founders launching every week.',
-      features: ['15 packs per month', 'All formats (9:16, 16:9, 1:1)', 'No watermark', 'Background music bed'],
+      features: ['15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed'],
       cta: 'Get Starter',
       featured: true,
     },
@@ -101,8 +101,16 @@ export function Landing() {
       name: 'Pro',
       price: '49',
       desc: 'AI video + talking head for pros.',
-      features: ['50 packs per month', 'AI-generated video (LTX-Video)', 'Talking head feature', 'Priority rendering'],
+      features: ['50 videos / month', '200 scripts / month', 'AI video (LTX-Video on A100)', 'Talking head feature'],
       cta: 'Get Pro',
+      featured: false,
+    },
+    {
+      name: 'Agency',
+      price: '149',
+      desc: 'For teams and high-volume creators.',
+      features: ['200 videos / month', 'Unlimited scripts + posters', 'White label option', 'Team seats + priority support'],
+      cta: 'Get Agency',
       featured: false,
     },
   ];
@@ -432,7 +440,7 @@ export function Landing() {
           </h2>
           <p className="text-zinc-400 text-lg mt-3">What agencies charge $400–1,900 for. Now in 90 seconds.</p>
         </div>
-        <div className="grid md:grid-cols-3 gap-6 text-left">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 text-left">
           {plans.map((plan, i) => (
             <div
               key={i}
