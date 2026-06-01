@@ -16,16 +16,17 @@ import { ResetPassword } from './components/auth/ResetPassword';
 import { VerifyEmail } from './components/auth/VerifyEmail';
 import { Pricing } from './components/Pricing';
 import { BetaAgreementModal } from './components/BetaAgreementModal';
+import { Landing } from './components/Landing';
 import './App.css';
 
-// Wraps all authenticated routes — shows agreement modal until user accepts.
+// Wraps all authenticated routes — shows landing page or app depending on auth.
 const ProtectedApp = () => {
   const { user, loading, acceptAgreement } = useAuth();
 
   if (loading) return null;
 
-  // Not logged in — redirect to login
-  if (!user) return <Navigate to="/login" replace />;
+  // Not logged in — show landing page
+  if (!user) return <Landing />;
 
   // Logged in but hasn't accepted the beta agreement yet
   if (user.has_agreed === false) {
@@ -53,6 +54,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Login register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
