@@ -129,7 +129,7 @@ MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'swiftpack-ltx-video')
 MODAL_ENABLED = bool(MODAL_TOKEN_ID and MODAL_TOKEN_SECRET)
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ['MONGODB_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
@@ -339,6 +339,7 @@ _RATE_LIMITS = {
     "/api/talking-head/generate": 3,   # expensive GPU call — 3/min hard cap
     "/api/talking-head/consent": 10,
     "/api/talking-head/verify-identity": 5,
+    "/api/generate-logo": 10,
 }
 
 app = FastAPI()
@@ -3057,11 +3058,363 @@ async def generate_talking_head(
     }
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# LOGO CREATOR
+# ══════════════════════════════════════════════════════════════════════════════
+
+IDEOGRAM_API_KEY = os.getenv('IDEOGRAM_API_KEY', '')
+
+_LOGO_SIZE = 1024
+_LOGO_BG   = (9, 9, 11)        # zinc-950
+_LOGO_WHITE = (250, 250, 250)
+_LOGO_MUTED = (161, 161, 170)  # zinc-400
+
+
+def _hex_to_rgb(hex_color: str) -> tuple:
+    h = hex_color.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _logo_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    candidates = (
+        [
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+            "C:/Windows/Fonts/calibrib.ttf",
+        ] if bold else [
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/calibri.ttf",
+        ]
+    )
+    for fp in candidates:
+        try:
+            return ImageFont.truetype(fp, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+
+def _tcx(draw, text, font, w):
+    bb = draw.textbbox((0, 0), text, font=font)
+    return (w - (bb[2] - bb[0])) // 2
+
+
+def _wrap(draw, text, font, max_w):
+    words = text.split()
+    lines, cur = [], ""
+    for word in words:
+        test = f"{cur} {word}".strip()
+        bb = draw.textbbox((0, 0), test, font=font)
+        if bb[2] - bb[0] > max_w and cur:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    return lines or [text[:24]]
+
+
+def _draw_block(draw, lines, font, w, y, color, gap=12):
+    for line in lines:
+        draw.text((_tcx(draw, line, font, w), y), line, fill=color, font=font)
+        bb = draw.textbbox((0, 0), line, font=font)
+        y += (bb[3] - bb[1]) + gap
+    return y
+
+
+def _logo_minimal(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S), _LOGO_BG)
+    d = ImageDraw.Draw(img)
+    d.rectangle([72, 240, 84, S - 240], fill=c1)
+    nf = _logo_font(80, bold=True)
+    y = _draw_block(d, _wrap(d, brand_name, nf, S - 200), nf, S, 300, _LOGO_WHITE, 14)
+    if tagline:
+        tf = _logo_font(38)
+        _draw_block(d, _wrap(d, tagline, tf, S - 200), tf, S, y + 24, _LOGO_MUTED, 8)
+    d.rectangle([72, S - 88, S - 72, S - 76], fill=c1)
+    return img
+
+
+def _logo_bold(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S), c1)
+    d = ImageDraw.Draw(img)
+    d.polygon([(S, S), (S, S // 2), (S // 2, S)], fill=tuple(max(0, v - 40) for v in c2))
+    nf = _logo_font(90, bold=True)
+    nlines = _wrap(d, brand_name, nf, S - 120)
+    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 14 for l in nlines)
+    if tagline:
+        lh += 70
+    y = max(80, (S - lh) // 2)
+    y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 14)
+    if tagline:
+        tf = _logo_font(40)
+        _draw_block(d, _wrap(d, tagline, tf, S - 120), tf, S, y + 20, (230, 230, 230), 8)
+    return img
+
+
+def _logo_tech(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S), _LOGO_BG)
+    d = ImageDraw.Draw(img)
+    words = brand_name.split()
+    initials = ''.join(w[0].upper() for w in words[:2] if w) or brand_name[:2].upper()
+    bf = _logo_font(200, bold=True)
+    inf = _logo_font(170, bold=True)
+    cy = 280
+    d.text((70, cy), "<", fill=c1, font=bf)
+    ib = d.textbbox((0, 0), initials, font=inf)
+    d.text(((S - (ib[2] - ib[0])) // 2, cy + 10), initials, fill=_LOGO_WHITE, font=inf)
+    rb = d.textbbox((0, 0), ">", font=bf)
+    d.text((S - (rb[2] - rb[0]) - 70, cy), ">", fill=c1, font=bf)
+    nf = _logo_font(62, bold=True)
+    y = _draw_block(d, _wrap(d, brand_name, nf, S - 160), nf, S, 618, _LOGO_WHITE, 10)
+    if tagline:
+        tf = _logo_font(36)
+        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, y + 14, c1, 8)
+    return img
+
+
+def _logo_gradient(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S))
+    d = ImageDraw.Draw(img)
+    for y_px in range(S):
+        t = y_px / (S - 1)
+        d.line([(0, y_px), (S - 1, y_px)], fill=(
+            int(c1[0] + (c2[0] - c1[0]) * t),
+            int(c1[1] + (c2[1] - c1[1]) * t),
+            int(c1[2] + (c2[2] - c1[2]) * t),
+        ))
+    overlay = Image.new('RGBA', (S, S), (0, 0, 0, 90))
+    img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+    d = ImageDraw.Draw(img)
+    nf = _logo_font(86, bold=True)
+    nlines = _wrap(d, brand_name, nf, S - 120)
+    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 14 for l in nlines)
+    if tagline:
+        lh += 68
+    y = max(80, (S - lh) // 2)
+    y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 14)
+    if tagline:
+        tf = _logo_font(40)
+        _draw_block(d, _wrap(d, tagline, tf, S - 120), tf, S, y + 20, (230, 230, 240), 8)
+    return img
+
+
+def _logo_monogram(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S), _LOGO_BG)
+    d = ImageDraw.Draw(img)
+    cx, cy, r = S // 2, 350, 210
+    d.ellipse([(cx-r-18, cy-r-18), (cx+r+18, cy+r+18)], fill=tuple(min(255, v // 3) for v in c1))
+    d.ellipse([(cx-r, cy-r), (cx+r, cy+r)], fill=c1)
+    words = brand_name.split()
+    initials = ''.join(w[0].upper() for w in words[:2] if w) or brand_name[:2].upper()
+    if_ = _logo_font(150, bold=True)
+    ib = d.textbbox((0, 0), initials, font=if_)
+    d.text((cx - (ib[2]-ib[0])//2, cy - (ib[3]-ib[1])//2 - 8), initials, fill=_LOGO_WHITE, font=if_)
+    nf = _logo_font(66, bold=True)
+    y = _draw_block(d, _wrap(d, brand_name, nf, S - 160), nf, S, 630, _LOGO_WHITE, 10)
+    if tagline:
+        tf = _logo_font(36)
+        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, y + 14, _LOGO_MUTED, 8)
+    return img
+
+
+def _logo_split(brand_name, tagline, c1, c2):
+    S = _LOGO_SIZE
+    img = Image.new('RGB', (S, S), _LOGO_BG)
+    d = ImageDraw.Draw(img)
+    split_y = S // 2
+    d.rectangle([0, 0, S, split_y], fill=c1)
+    d.polygon([(0, split_y), (S // 3, split_y), (0, split_y + S // 5)], fill=c2)
+    nf = _logo_font(80, bold=True)
+    nlines = _wrap(d, brand_name, nf, S - 120)
+    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 12 for l in nlines)
+    y = split_y - lh // 2 - 20
+    for line in nlines:
+        x = _tcx(d, line, nf, S)
+        for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2)]:
+            d.text((x+dx, y+dy), line, fill=_LOGO_BG, font=nf)
+        d.text((x, y), line, fill=_LOGO_WHITE, font=nf)
+        bb = d.textbbox((0, 0), line, font=nf)
+        y += (bb[3] - bb[1]) + 12
+    if tagline:
+        tf = _logo_font(38)
+        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, split_y + 64, _LOGO_MUTED, 8)
+    return img
+
+
+_LOGO_TEMPLATES = {
+    "minimal":  _logo_minimal,
+    "bold":     _logo_bold,
+    "tech":     _logo_tech,
+    "gradient": _logo_gradient,
+    "monogram": _logo_monogram,
+    "split":    _logo_split,
+}
+
+
+class LogoGenerateRequest(BaseModel):
+    brand_name: str = Field(min_length=1, max_length=60)
+    tagline: Optional[str] = Field(default="", max_length=150)
+    primary_color: str = "#6366f1"
+    secondary_color: str = "#8b5cf6"
+    style: str = "minimal"
+    mode: str = "both"
+
+    @field_validator("style")
+    @classmethod
+    def _val_style(cls, v):
+        if v not in _LOGO_TEMPLATES:
+            raise ValueError(f"style must be one of: {', '.join(_LOGO_TEMPLATES)}")
+        return v
+
+    @field_validator("mode")
+    @classmethod
+    def _val_mode(cls, v):
+        if v not in {"template", "ai", "both"}:
+            raise ValueError("mode must be template, ai, or both")
+        return v
+
+    @field_validator("primary_color", "secondary_color")
+    @classmethod
+    def _val_color(cls, v):
+        if not re.match(r'^#[0-9a-fA-F]{6}$', v):
+            raise ValueError("Color must be #rrggbb")
+        return v.lower()
+
+
+class SaveLogoRequest(BaseModel):
+    logo_url: str = Field(max_length=500)
+    brand_name: str = Field(max_length=100)
+    logo_type: str = "template"
+
+
+async def _call_ideogram(brand_name: str, tagline: str, primary_color: str, style: str) -> list:
+    if not IDEOGRAM_API_KEY:
+        return []
+    hints = {
+        "minimal": "minimalist clean typography logo",
+        "bold": "bold strong impactful logo",
+        "tech": "tech digital futuristic code logo",
+        "gradient": "colorful gradient vibrant logo",
+        "monogram": "monogram lettermark badge logo",
+        "split": "geometric two-tone modern logo",
+    }
+    prompt = (
+        f"Professional logo for brand '{brand_name}'"
+        + (f", tagline '{tagline}'" if tagline else "")
+        + f". {hints.get(style, 'modern professional logo')}. "
+        + f"Primary brand color {primary_color}. "
+        + "Clean vector design centered composition no watermarks no extra text "
+        + "suitable for app icon and website header."
+    )
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            resp = await http.post(
+                "https://api.ideogram.ai/generate",
+                headers={"Api-Key": IDEOGRAM_API_KEY, "Content-Type": "application/json"},
+                json={"image_request": {
+                    "prompt": prompt, "model": "V_2",
+                    "style_type": "DESIGN", "aspect_ratio": "ASPECT_1_1", "num_images": 4,
+                }},
+            )
+        if resp.status_code != 200:
+            logger.warning(f"Ideogram {resp.status_code}: {resp.text[:200]}")
+            return []
+        results = []
+        for item in resp.json().get("data", []):
+            url = item.get("url", "")
+            if not url:
+                continue
+            logo_id = uuid.uuid4().hex[:12]
+            fname = f"logo_ai_{logo_id}.png"
+            fpath = OUTPUTS_DIR / fname
+            try:
+                async with httpx.AsyncClient(timeout=20) as http2:
+                    img_resp = await http2.get(url)
+                fpath.write_bytes(img_resp.content)
+                results.append({"id": logo_id, "url": f"/api/download/{fname}"})
+            except Exception as e:
+                logger.warning(f"Ideogram image save failed: {e}")
+        return results
+    except Exception as e:
+        logger.warning(f"Ideogram call failed: {e}")
+        return []
+
+
+@api_router.post("/generate-logo")
+async def generate_logo(request: LogoGenerateRequest, user=Depends(get_optional_user)):
+    primary_rgb = _hex_to_rgb(request.primary_color)
+    secondary_rgb = _hex_to_rgb(request.secondary_color)
+
+    templates = []
+    if request.mode in ("template", "both"):
+        selected = request.style
+        alternatives = [s for s in _LOGO_TEMPLATES if s != selected][:2]
+        for style_name in [selected] + alternatives:
+            fn = _LOGO_TEMPLATES[style_name]
+            try:
+                img = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda f=fn, bn=request.brand_name, tl=request.tagline or "", p=primary_rgb, s=secondary_rgb:
+                        f(bn, tl, p, s)
+                )
+                logo_id = uuid.uuid4().hex[:12]
+                fname = f"logo_{style_name}_{logo_id}.png"
+                fpath = OUTPUTS_DIR / fname
+                await asyncio.get_event_loop().run_in_executor(None, lambda fp=fpath, im=img: im.save(str(fp)))
+                templates.append({"id": logo_id, "url": f"/api/download/{fname}", "template": style_name})
+            except Exception as e:
+                logger.warning(f"Logo template '{style_name}' failed: {e}")
+
+    ai_concepts = []
+    if request.mode in ("ai", "both"):
+        ai_concepts = await _call_ideogram(
+            request.brand_name, request.tagline or "", request.primary_color, request.style
+        )
+
+    return {"templates": templates, "ai_concepts": ai_concepts, "ai_available": bool(IDEOGRAM_API_KEY)}
+
+
+@api_router.post("/logos/save")
+async def save_logo(req: SaveLogoRequest, user=Depends(get_current_user)):
+    await db.logos.insert_one({
+        "id": uuid.uuid4().hex,
+        "user_id": user["id"],
+        "logo_url": req.logo_url,
+        "brand_name": req.brand_name,
+        "logo_type": req.logo_type,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"saved": True}
+
+
+@api_router.get("/logos")
+async def get_saved_logos(user=Depends(get_current_user)):
+    logos = await db.logos.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return logos
+
+
+from jarvis_router import router as jarvis_router  # noqa: E402
+
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(talking_router)
+app.include_router(jarvis_router)
 
 
 @app.on_event("shutdown")

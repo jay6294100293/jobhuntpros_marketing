@@ -17,6 +17,7 @@ import { VerifyEmail } from './components/auth/VerifyEmail';
 import { Pricing } from './components/Pricing';
 import { BetaAgreementModal } from './components/BetaAgreementModal';
 import { Landing } from './components/Landing';
+import { LogoCreator } from './components/LogoCreator';
 import './App.css';
 
 // Wraps all authenticated routes — shows landing page or app depending on auth.
@@ -41,6 +42,7 @@ const ProtectedApp = () => {
         <Route path="/scripts" element={<ScriptGenerator />} />
         <Route path="/create" element={<CreateContent />} />
         <Route path="/gallery" element={<Gallery />} />
+        <Route path="/logo" element={<LogoCreator />} />
         <Route path="/pricing" element={<Pricing />} />
       </Routes>
     </Layout>
