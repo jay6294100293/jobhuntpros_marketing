@@ -4,9 +4,9 @@ version: "3.9"
 #   docker-compose -f docker-compose.prod.yml up -d --build
 #
 # Prerequisites on server:
-#   - /home/ubuntu/secrets/swiftpack.env must exist with real values
-#   - SSL certs at /etc/letsencrypt/live/swiftpackai.tech/
-#   - Run server-setup.sh first if this is a fresh server
+#   - /root/secrets/swiftpack.env must exist with real values
+#   - SSL certs at /etc/letsencrypt/live/launchbusinessai.com/
+#   - Server runs as root (Contabo VPS)
 
 services:
   mongo:
@@ -14,7 +14,6 @@ services:
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
-    # Not exposed externally — backend accesses via internal network only
     expose:
       - "27017"
 
@@ -22,13 +21,13 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file:
-      - /home/ubuntu/secrets/swiftpack.env
+      - /root/secrets/swiftpack.env
     environment:
       - MONGO_URL=mongodb://mongo:27017
       - DB_NAME=swiftpackai_db
-      - BACKEND_URL=https://swiftpackai.tech
-      - FRONTEND_URL=https://swiftpackai.tech
-      - CORS_ORIGINS=https://swiftpackai.tech,https://www.swiftpackai.tech
+      - BACKEND_URL=https://launchbusinessai.com
+      - FRONTEND_URL=https://launchbusinessai.com
+      - CORS_ORIGINS=https://launchbusinessai.com,https://www.launchbusinessai.com,https://swiftpackai.tech,https://www.swiftpackai.tech
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/tts-key.json
     depends_on:
       - mongo
@@ -37,13 +36,13 @@ services:
     volumes:
       - backend_outputs:/app/outputs
       - backend_uploads:/app/uploads
-      - /home/ubuntu/secrets/swiftpack-tts-key.json:/run/secrets/tts-key.json:ro
+      - /root/secrets/swiftpack-tts-key.json:/run/secrets/tts-key.json:ro
 
   frontend:
     build:
       context: ./frontend
       args:
-        - REACT_APP_BACKEND_URL=https://swiftpackai.tech
+        - REACT_APP_BACKEND_URL=https://launchbusinessai.com
     restart: unless-stopped
     expose:
       - "80"
