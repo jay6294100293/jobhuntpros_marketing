@@ -1,4 +1,4 @@
-import urllib3
+﻿import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request, Response
@@ -66,7 +66,7 @@ if _SENTRY_DSN:
         dsn=_SENTRY_DSN,
         traces_sample_rate=0.1,
         environment=os.getenv("ENVIRONMENT", "development"),
-        release=os.getenv("SENTRY_RELEASE", "swiftpack@1.0.0"),
+        release=os.getenv("SENTRY_RELEASE", "launchbusiness@1.0.0"),
     )
 
 # ── FFmpeg path detection ──────────────────────────────────────────────────────
@@ -104,8 +104,8 @@ if STRIPE_SECRET_KEY and stripe_lib:
     stripe_lib.api_key = STRIPE_SECRET_KEY
 
 BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
-BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@swiftpackai.tech')
-BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'SwiftPack AI')
+BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@launchbusinessai.com')
+BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'LaunchBusiness AI')
 
 ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 
@@ -125,7 +125,7 @@ STRIPE_AGENCY_PRICE_ID = os.getenv('STRIPE_AGENCY_PRICE_ID', '')
 # Modal.com GPU integration (Pro/Agency tier)
 MODAL_TOKEN_ID = os.getenv('MODAL_TOKEN_ID', '')
 MODAL_TOKEN_SECRET = os.getenv('MODAL_TOKEN_SECRET', '')
-MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'swiftpack-ltx-video')
+MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'launchbusiness-ltx-video')
 MODAL_ENABLED = bool(MODAL_TOKEN_ID and MODAL_TOKEN_SECRET)
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ if _gemini_ready:
                 'base_url': f'{_helicone_host.rstrip("/")}/gemini',
                 'headers': {
                     'Helicone-Auth': f'Bearer {_helicone_api_key}',
-                    'Helicone-Property-App': 'swiftpack',
+                    'Helicone-Property-App': 'launchbusiness',
                     'Helicone-Property-Environment': os.getenv('ENVIRONMENT', 'development'),
                 },
             },
@@ -841,7 +841,7 @@ def _make_slide_solution(width, height, color1, color2, product_name, sentence, 
 
     # Product name — large
     name_font = _get_font(max(46, width // 14))
-    name = product_name[:28] if product_name else "SwiftPack AI"
+    name = product_name[:28] if product_name else "LaunchBusiness AI"
     name_y = int(height * 0.52)
     _draw_text_centered(draw, name, name_font, name_y, width, (255, 255, 255))
 
@@ -970,7 +970,7 @@ def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path)
 
     # Product name
     name_font = _get_font(max(32, width // 20))
-    name = product_name[:30] if product_name else "SwiftPack AI"
+    name = product_name[:30] if product_name else "LaunchBusiness AI"
     _draw_text_centered(draw, name, name_font, int(height * 0.4), width, (*_lighten(c1, 0.7),))
 
     # URL button visual
@@ -982,7 +982,7 @@ def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path)
     draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h],
                             radius=btn_h // 3, fill=(*_lighten(c1, 0.2),))
     url_font = _get_regular_font(max(20, width // 36))
-    url_text = (url[:40] if url else "swiftpackai.tech")
+    url_text = (url[:40] if url else "launchbusinessai.com")
     url_bbox = draw.textbbox((0, 0), url_text, font=url_font)
     url_w = url_bbox[2] - url_bbox[0]
     url_x = (width - url_w) // 2
@@ -1003,7 +1003,7 @@ def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path)
     img.save(dest_path, 'JPEG', quality=92)
 
 
-def _apply_watermark(image_path: str, text: str = "SwiftPack AI"):
+def _apply_watermark(image_path: str, text: str = "LaunchBusiness AI"):
     """
     Burn a diagonal watermark into the CENTER of the slide image.
     The text is large, semi-transparent, and rotated 30° so it covers the
@@ -1069,7 +1069,7 @@ def _make_design_slides(
     Generate 6 structured marketing slide templates using Pillow.
     Returns list of file paths in slide order.
     Templates: Hero, Problem, Solution, Features, How It Works, CTA
-    If watermark=True, burns 'SwiftPack AI' diagonally into each slide's content area.
+    If watermark=True, burns 'LaunchBusiness AI' diagonally into each slide's content area.
     """
     slides = []
 
@@ -1682,8 +1682,8 @@ async def _openrouter_generate(prompt: str) -> str:
     headers = {
         "Authorization": f"Bearer {_openrouter_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://swiftpackai.tech",
-        "X-Title": "SwiftPack AI",
+        "HTTP-Referer": "https://launchbusinessai.com",
+        "X-Title": "LaunchBusiness AI",
     }
     payload = {
         "model": "mistralai/mistral-7b-instruct:free",
@@ -1806,7 +1806,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     color2 = request.brand_colors[1] if len(request.brand_colors) > 1 else "#8b5cf6"
 
     # Try to download scraped images for use as video backgrounds
-    tmp_dir = Path(tempfile.mkdtemp(prefix="swiftpack_imgs_"))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="launchbusiness_imgs_"))
     local_images: List[str] = []
     loop = asyncio.get_event_loop()
 
@@ -2308,7 +2308,7 @@ async def health_check():
 
 @api_router.get("/")
 async def root():
-    return {"message": "SwiftPack AI API"}
+    return {"message": "LaunchBusiness AI API"}
 
 
 # ── Auth Router ────────────────────────────────────────────────────────────────
@@ -2459,11 +2459,11 @@ async def resend_verification(user=Depends(get_current_user)):
     await send_email(
         to_email=user["email"],
         to_name=user.get("name", ""),
-        subject="Verify your SwiftPack AI email",
+        subject="Verify your LaunchBusiness AI email",
         html=f"""
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#6366f1">Verify your email</h2>
-          <p>Click the button below to verify your SwiftPack AI account.</p>
+          <p>Click the button below to verify your LaunchBusiness AI account.</p>
           <a href="{verify_link}"
              style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
             Verify Email
@@ -2490,7 +2490,7 @@ async def forgot_password(req: ForgotPasswordRequest):
         await send_email(
             to_email=user["email"],
             to_name=user.get("name", ""),
-            subject="Reset your SwiftPack AI password",
+            subject="Reset your LaunchBusiness AI password",
             html=f"""
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
               <h2 style="color:#6366f1">Reset your password</h2>
@@ -2652,10 +2652,10 @@ async def approve_beta_user(req: ApproveBetaUserRequest, request: Request):
     await send_email(
         to_email=email,
         to_name=name,
-        subject="Welcome to SwiftPack AI Beta — Your account is ready",
+        subject="Welcome to LaunchBusiness AI Beta — Your account is ready",
         html=f"""
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-          <h2 style="color:#6366f1">Welcome to SwiftPack AI Beta!</h2>
+          <h2 style="color:#6366f1">Welcome to LaunchBusiness AI Beta!</h2>
           <p>Hi {name}, your beta access has been approved.</p>
           <p>Sign in at <a href="{FRONTEND_URL}/login">{FRONTEND_URL}/login</a> with:</p>
           <ul>

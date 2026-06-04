@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sparkles, Lock, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,7 +51,7 @@ export const ResetPassword = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">LaunchBusiness AI</h1>
           <p className="text-zinc-400 mt-2">Set a new password</p>
         </div>
 

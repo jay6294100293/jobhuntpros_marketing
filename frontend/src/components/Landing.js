@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, Zap, FileText, Image, Video, ArrowRight, Check } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────
-   SwiftPack AI — Landing Page
+   LaunchBusiness AI — Landing Page
    Design system: Cybernetic Studio (matches app exactly)
    - bg-zinc-950 dark base
    - Outfit (headings) + DM Sans (body) — already installed
@@ -84,8 +84,8 @@ export function Landing() {
     {
       name: 'Free',
       price: '0',
-      desc: 'Try SwiftPack with no commitment.',
-      features: ['3 videos lifetime', '5 scripts lifetime', '9:16 format only', 'SwiftPack watermark'],
+      desc: 'Try LaunchBusiness AI with no commitment.',
+      features: ['3 videos lifetime', '5 scripts lifetime', '9:16 format only', 'LaunchBusiness AI watermark'],
       cta: 'Start free',
       featured: false,
     },
@@ -128,7 +128,7 @@ export function Landing() {
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: '#fafafa' }}>
-            SwiftPack
+            LaunchBusiness AI
           </span>
         </Link>
         <div className="flex items-center gap-3">
@@ -218,7 +218,7 @@ export function Landing() {
             marginBottom: 40,
           }}
         >
-          Paste any product URL. SwiftPack generates 2 videos, 2 scripts,
+          Paste any product URL. LaunchBusiness AI generates 2 videos, 2 scripts,
           and 2 posters — ready to post on every platform. What agencies charge
           $400–1,900 for. In 90 seconds.
         </p>
@@ -262,7 +262,7 @@ export function Landing() {
             <div className="w-3 h-3 rounded-full bg-zinc-700" />
             <div className="w-3 h-3 rounded-full bg-zinc-700" />
             <div className="flex-1 mx-3 bg-zinc-800/60 rounded-md px-3 py-1.5 flex items-center gap-2">
-              <span className="text-xs text-zinc-500">swiftpackai.tech</span>
+              <span className="text-xs text-zinc-500">launchbusinessai.com</span>
             </div>
           </div>
 
@@ -349,7 +349,7 @@ export function Landing() {
 
         <div className="grid md:grid-cols-3 gap-6 mt-14">
           {[
-            { n: '01', title: 'Paste your URL', desc: 'Drop in your product URL. SwiftPack extracts brand colors, headlines, and features automatically.' },
+            { n: '01', title: 'Paste your URL', desc: 'Drop in your product URL. LaunchBusiness AI extracts brand colors, headlines, and features automatically.' },
             { n: '02', title: 'AI builds everything', desc: 'Gemini writes the scripts. Neural voice records audio. LTX-Video assembles the videos. Pillow designs the posters.' },
             { n: '03', title: 'Download and post', desc: 'Get 2 videos, 2 scripts, and 2 posters — ready for TikTok, YouTube, Instagram, and LinkedIn.' },
           ].map((step, i) => (
@@ -526,7 +526,7 @@ export function Landing() {
           <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
             <Sparkles className="w-3 h-3 text-white" />
           </div>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14, color: '#52525b' }}>SwiftPack AI</span>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14, color: '#52525b' }}>LaunchBusiness AI</span>
         </div>
         <div className="flex gap-6">
           {[['Pricing', '/pricing'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['NovaJay Tech', 'https://novajaytech.com']].map(([label, href]) => (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -33,7 +33,7 @@ export const Login = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">LaunchBusiness AI</h1>
           <p className="text-zinc-400 mt-2">Sign in to your account</p>
         </div>
 
@@ -95,7 +95,7 @@ export const Login = () => {
           </form>
 
           <p className="text-center text-sm text-zinc-500">
-            SwiftPack AI is invite-only.{' '}
+            LaunchBusiness AI is invite-only.{' '}
             <a href="mailto:admin@novajaytech.com" className="text-indigo-400 hover:text-indigo-300">
               Request access
             </a>

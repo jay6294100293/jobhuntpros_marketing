@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Check, Zap, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ const plans = [
       '5 scripts lifetime',
       '5 posters lifetime',
       '9:16 format only',
-      'SwiftPack watermark',
+      'LaunchBusiness AI watermark',
       'Basic slideshow video',
     ],
     cta: 'Current Plan',

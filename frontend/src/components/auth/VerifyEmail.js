@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Sparkles, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -118,7 +118,7 @@ export const VerifyEmail = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">LaunchBusiness AI</h1>
         </div>
         <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           {renderContent()}

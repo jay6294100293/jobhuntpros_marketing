@@ -1,4 +1,4 @@
-﻿# SWIFTPACK AI (formerly Content Studio) — CLAUDE CODE MASTER PROMPT
+# SWIFTPACK AI (formerly Content Studio) — CLAUDE CODE MASTER PROMPT
 # Read this entire file before touching any code. No exceptions.
 
 ---
@@ -257,7 +257,7 @@ Mother monitors Content Studio via:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jobhuntpro_marketing** (1138 symbols, 3125 relationships, 57 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jobhuntpro_marketing** (1133 symbols, 3120 relationships, 57 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

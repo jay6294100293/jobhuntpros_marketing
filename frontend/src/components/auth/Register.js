@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, Mail, User, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,7 +36,7 @@ export const Register = () => {
       // Auto-login after successful registration
       if (res.data?.access_token) {
         login(res.data.access_token, res.data.user);
-        toast.success('Account created! Welcome to SwiftPack AI 🎉');
+        toast.success('Account created! Welcome to LaunchBusiness AI 🎉');
         navigate('/');
       } else {
         toast.success('Account created! Please sign in.');
@@ -57,7 +57,7 @@ export const Register = () => {
           <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">SwiftPack AI</h1>
+          <h1 className="text-3xl font-heading font-bold text-gradient">LaunchBusiness AI</h1>
           <p className="text-zinc-400 mt-2">Create your free account</p>
         </div>
 
@@ -162,7 +162,7 @@ export const Register = () => {
 
         <p className="text-center text-xs text-zinc-600 mt-4">
           By creating an account you agree to our{' '}
-          <a href="https://swiftpackai.tech/terms" className="underline hover:text-zinc-400" target="_blank" rel="noreferrer">
+          <a href="https://launchbusinessai.com/terms" className="underline hover:text-zinc-400" target="_blank" rel="noreferrer">
             Terms of Service
           </a>
         </p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
@@ -136,7 +136,7 @@ export const Dashboard = () => {
                   type="text"
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder="SwiftPack AI"
+                  placeholder="LaunchBusiness AI"
                   data-testid="product-name-input"
                   className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
                 />

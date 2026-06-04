@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,7 +22,7 @@ export const BetaAgreementModal = ({ onAccepted }) => {
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5">
           <div className="flex items-center gap-3">
             <Shield className="w-6 h-6 text-white shrink-0" />
-            <h2 className="text-lg font-semibold text-white">SwiftPack AI Beta Testing Agreement</h2>
+            <h2 className="text-lg font-semibold text-white">LaunchBusiness AI Beta Testing Agreement</h2>
           </div>
         </div>
 
@@ -64,7 +64,7 @@ export const BetaAgreementModal = ({ onAccepted }) => {
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            I Accept — Continue to SwiftPack AI
+            I Accept — Continue to LaunchBusiness AI
           </button>
         </div>
       </div>

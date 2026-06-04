@@ -1,4 +1,4 @@
-"""JARVIS intelligence endpoint for SwiftPack AI.
+﻿"""JARVIS intelligence endpoint for LaunchBusiness AI.
 
 Called by JARVIS on Mac Mini every 5 minutes.
 Auth: X-Admin-Key header must match ADMIN_SECRET env var.
@@ -89,7 +89,7 @@ async def pulse(x_admin_key: str = Header(default="")):
 
     return {
         "service":   "swiftpack",
-        "domain":    "swiftpackai.tech",
+        "domain":    "launchbusinessai.com",
         "timestamp": now.isoformat(),
         "status":    "ok" if db_ok else "degraded",
 

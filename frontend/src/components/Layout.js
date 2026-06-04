@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles, Home, Upload, Wand2, Image, FolderOpen, LogOut, Zap, Tag, Palette } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +36,7 @@ export const Layout = ({ children }) => {
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-heading font-bold text-gradient" data-testid="app-title">SwiftPack AI</h1>
+                <h1 className="text-xl font-heading font-bold text-gradient" data-testid="app-title">LaunchBusiness AI</h1>
                 <p className="text-xs text-zinc-500 font-mono">Launch Pack Generator</p>
               </div>
             </div>
@@ -108,7 +108,7 @@ export const Layout = ({ children }) => {
       {user && (
         <div className="relative z-20 bg-amber-950/60 border-b border-amber-800/40 px-4 py-2 text-center">
           <p className="text-xs text-amber-300">
-            <span className="font-semibold">SwiftPack AI Beta</span> — This software is provided for testing purposes only. Features may change without notice.
+            <span className="font-semibold">LaunchBusiness AI Beta</span> — This software is provided for testing purposes only. Features may change without notice.
           </p>
         </div>
       )}
