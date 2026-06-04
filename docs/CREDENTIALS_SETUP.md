@@ -1,4 +1,4 @@
-# CONTENT STUDIO — COMPLETE CREDENTIALS SETUP
+﻿# CONTENT STUDIO — COMPLETE CREDENTIALS SETUP
 # Every single credential needed. No skipping. Replace everything with new keys.
 # Last updated: 2026-04-06
 
@@ -178,7 +178,7 @@ BREVO_SENDER_NAME=JobHuntPro Studio
 ## STEP 8 — DEPLOYMENT DOMAIN + SERVER
 
 **Option A — VPS (recommended for video processing)**
-**Account:** Sign up at https://www.hetzner.com
+**Account:** Sign up at https://www.contabo.com
 **Email:** contentstudio.dev@gmail.com
 **Card:** RBC Business Mastercard (~€6-10/month)
 

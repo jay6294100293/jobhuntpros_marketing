@@ -1,4 +1,4 @@
-# SWIFTPACK AI — STARTUP GUIDE
+﻿# SWIFTPACK AI — STARTUP GUIDE
 # Product: SwiftPack AI | Domain: swiftpackai.tech
 # Company: NovaJay Tech (novajaytech.com) | Entity: FM1032559
 # Last updated: 2026-04-08
@@ -174,7 +174,7 @@ This is a background improvement — not blocking launch.
 SwiftPack AI uses Docker Compose. The deployment is straightforward.
 
 ### Step 1 — Server
-Create a Hetzner account (hetzner.com) using swiftpackai.dev@gmail.com.
+Create a Contabo account (contabo.com) using swiftpackai.dev@gmail.com.
 Add RBC Business Mastercard for billing.
 Create a new server:
 - Type: CX32 (4 vCPU, 8 GB RAM) — video processing needs RAM
@@ -217,7 +217,7 @@ and port 3000 for the frontend.
 Run certbot to get a free SSL certificate for swiftpackai.tech.
 
 ### Step 7 — Point domain
-In Cloudflare, add an A record pointing swiftpackai.tech to your Hetzner server IP.
+In Cloudflare, add an A record pointing swiftpackai.tech to your Contabo VPS IP.
 
 ### Step 8 — Test end to end
 Go to https://swiftpackai.tech
@@ -272,7 +272,7 @@ a demonstration of what SwiftPack AI can do.
 - Get Gemini API key and MongoDB Atlas connection string
 - Set up Google Cloud TTS — download JSON key
 - Fill in backend/.env completely
-- Create Hetzner server — install Docker, Nginx, FFmpeg
+- Create Contabo VPS — install Docker, Nginx, FFmpeg
 - Deploy with docker-compose up -d
 - Test Magic Button end to end
 - SwiftPack AI is LIVE

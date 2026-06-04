@@ -1,4 +1,4 @@
-# SwiftPack AI
+﻿# SwiftPack AI
 
 > Transform any website URL into a complete marketing launch pack in 30 seconds — videos, scripts, and posters, all AI-powered and completely free to run.
 
@@ -175,7 +175,7 @@ No GitHub Secrets needed.
 
 View logs on server:
 ```bash
-tail -f /home/ubuntu/logs/swiftpack-deploy.log
+tail -f /root/logs/swiftpack-deploy.log
 ```
 
 ### How it works
@@ -188,30 +188,30 @@ tail -f /home/ubuntu/logs/swiftpack-deploy.log
 
 ### Fresh server setup
 
-Run once on a new EC2 instance to configure the auto-deploy cron:
+Run once on a new Contabo VPS to configure the auto-deploy cron:
 
 ```bash
 # Clone repo
-git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /home/ubuntu/swiftpack
+git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /root/swiftpack
 
 # Run cron setup script (copies auto-deploy.sh and installs crontab entry)
-bash /home/ubuntu/swiftpack/scripts/setup-cron.sh
+bash /root/swiftpack/scripts/setup-cron.sh
 
 # Add secrets
-nano /home/ubuntu/secrets/swiftpack.env
+nano /root/secrets/swiftpack.env
 ```
 
 ### SSL certificate
 
 ```bash
-sudo certbot certonly --standalone -d swiftpackai.tech -d www.swiftpackai.tech
+certbot certonly --standalone -d swiftpackai.tech -d www.swiftpackai.tech
 ```
 
 ### Manual deploy (emergency)
 
 ```bash
-ssh -i ~/path/to/key.pem ubuntu@99.79.39.115 \
-  "cd /home/ubuntu/swiftpack && git pull && docker compose up -d --build"
+ssh -i ~/path/to/key.pem root@YOUR_SERVER_IP \
+  "cd /root/swiftpack && git pull && docker compose up -d --build"
 ```
 
 ---
@@ -259,11 +259,11 @@ Body: { "url": "https://yourproduct.com" }
 
 **MongoDB connection failed** — Start MongoDB: `mongod --dbpath /path/to/data`
 
-**FFmpeg not found** — Install via `sudo apt-get install ffmpeg` (Linux) or `brew install ffmpeg` (macOS)
+**FFmpeg not found** — Install via `apt-get install ffmpeg` (Linux) or `brew install ffmpeg` (macOS)
 
 **CORS errors** — Set `CORS_ORIGINS=http://localhost:3000` in `backend/.env`
 
-**Video creation fails / TextClip font error** — Install fonts: `sudo apt-get install fonts-liberation`
+**Video creation fails / TextClip font error** — Install fonts: `apt-get install fonts-liberation`
 
 ---
 

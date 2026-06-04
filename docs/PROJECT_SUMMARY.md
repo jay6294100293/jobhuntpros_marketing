@@ -1,4 +1,4 @@
-# SwiftPack AI — Project Summary
+﻿# SwiftPack AI — Project Summary
 # Last updated: May 2026
 
 ---
@@ -46,7 +46,7 @@ SwiftPack AI turns any product URL into a complete marketing launch pack in 90 s
   - `backend/modal_sadtalker.py` deploys `swiftpack-sadtalker` on A10G GPU
   - 5-layer protection: tier gate, Stripe Identity, DeepFace, consent, "AI GENERATED" label
   - All endpoints live: `/api/talking-head/consent`, `/api/talking-head/verify-identity`, `/api/talking-head/generate`
-- Docker Compose deployment on EC2 (swiftpackai.tech)
+- Docker Compose deployment on VPS (swiftpackai.tech)
 - SSL via Let's Encrypt + Nginx reverse proxy
 - Rate limiting (in-process per-route limits)
 
@@ -74,8 +74,8 @@ GPU:        Modal.com — LTX-Video (A100-40GB), SadTalker (A10G)
 Ports:      Backend 8001, Frontend 3000
 Proxy:      Nginx (SSL termination + reverse proxy)
 Deploy:     Docker Compose (4 containers: mongo, backend, frontend, nginx)
-Server:     AWS EC2 (ubuntu@99.79.39.115)
-Repo path:  /home/ubuntu/swiftpack
+Server:     Contabo VPS (root@YOUR_SERVER_IP)
+Repo path:  /root/swiftpack
 SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads or E:\secrets\)
 ```
 
@@ -124,7 +124,7 @@ docs/PROJECT_SUMMARY.md        This file
 ## Environment Variables
 
 ```env
-# /home/ubuntu/secrets/swiftpack.env (production)
+# /root/secrets/swiftpack.env (production)
 # E:/secrets/swiftpack.env (local Windows dev)
 
 MONGO_URL=mongodb://mongo:27017
@@ -156,10 +156,10 @@ MODAL_SADTALKER_APP=swiftpack-sadtalker     # default
 
 ```bash
 # SSH into server
-ssh -i ~/Downloads/novajaytechserver_testing-key.pem ubuntu@99.79.39.115
+ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@YOUR_SERVER_IP
 
 # Pull + rebuild backend
-cd /home/ubuntu/swiftpack
+cd /root/swiftpack
 git pull
 docker compose build backend
 docker compose up -d backend
@@ -196,17 +196,17 @@ curl -X POST https://swiftpackai.tech/api/auth/register \
 
 ```
 Current monthly infra (no GPU active):
-  EC2 (t3.micro):  ~$10-20/month
+  VPS (Contabo VPS):  ~$10-20/month
   MongoDB:         $0 (self-hosted in Docker)
   Gemini API:      $0 (within free tier for current volume)
   Edge TTS:        $0 (Microsoft free, no API key)
   Total:           ~$10-20/month
 
 With Modal GPU active (Pro/Agency tier):
-  EC2:             ~$20/month
+  VPS:             ~$20/month
   LTX-Video:       ~$0.44/generation on A100 (pay per second, $0 idle)
   SadTalker:       ~$0.10/generation on A10G
-  At 500 pro gens: ~$270 GPU + $20 EC2 = $290/month
+  At 500 pro gens: ~$270 GPU + $20 VPS = $290/month
   Pro revenue (50 users × $49): $2,450/month → very profitable
 ```
 
@@ -235,7 +235,7 @@ See `docs/PRODUCT_STRATEGY.md` for full strategy.
 - MongoDB writes silently skipped if unavailable (content still generates)
 - httpx uses verify=False for scraping (SSL cert issues on some sites)
 - GTX 1080 Ti is reserved for Mother AI — NEVER route SwiftPack traffic to it
-- Playwright/Chromium too heavy for EC2 t3.micro — don't install on server
+- Playwright/Chromium too heavy for VPS Contabo VPS — don't install on server
 - Modal GPU not active until `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` set in secrets file
 - Stripe billing not active until price IDs and keys added to secrets file
 - Music beds folder `backend/assets/music_beds/` is empty by default — drop royalty-free `.mp3` files to activate; Pixabay, Free Music Archive, or ccMixter are good sources

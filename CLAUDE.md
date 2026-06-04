@@ -1,4 +1,4 @@
-# SWIFTPACK AI (formerly Content Studio) — CLAUDE CODE MASTER PROMPT
+﻿# SWIFTPACK AI (formerly Content Studio) — CLAUDE CODE MASTER PROMPT
 # Read this entire file before touching any code. No exceptions.
 
 ---
@@ -54,7 +54,7 @@ Frontend    → React 19 + Tailwind CSS 3.4 + Shadcn/UI + React Router DOM 7.5.1
 Database    → MongoDB (Motor async driver) — resilient, works without it
 AI / LLM    → Google Gemini 2.5 Flash (google-genai SDK — NOT google-generativeai)
 TTS         → gTTS (current) → Edge TTS planned (free, neural voices, no key)
-Video       → FFmpeg + Pillow (CPU only — no GPU on EC2)
+Video       → FFmpeg + Pillow (CPU only — no GPU on VPS)
 Scraping    → BeautifulSoup4 + httpx (verify=False for SSL compat)
 Auth        → JWT (jose) + bcrypt + beta agreement modal
 Payments    → Stripe (in code, not yet active)
@@ -62,7 +62,7 @@ Ports       → Backend: 8001, Frontend: 3000
 Proxy       → Nginx (SSL + reverse proxy, Let's Encrypt cert)
 Deployment  → Docker Compose (4 containers: mongo, backend, frontend, nginx)
 Domain      → swiftpackai.tech
-Server      → AWS EC2 ubuntu@99.79.39.115, repo at /home/ubuntu/swiftpack
+Server      → Contabo VPS root@YOUR_SERVER_IP, repo at /root/swiftpack
 SSH key     → novajaytechserver_testing-key.pem (in ~/Downloads)
 Company     → NovaJay Tech (novajaytech.com)
 ```
@@ -103,7 +103,7 @@ Magic Button response: 2 videos + 2 scripts + 2 posters
 - Hardcode API keys — always read from environment variables
 - Use synchronous operations for video generation — all heavy ops must be async
 - Block the FastAPI event loop — run heavy work in `asyncio.run_in_executor`
-- Install Playwright/Chromium on EC2 — t3.micro has 1GB RAM, it will OOM
+- Install Playwright/Chromium on VPS — Contabo VPS has 1GB RAM, it will OOM
 - Launch talking head feature without ID verification + DeepFace check (deepfake risk)
 
 ### ALWAYS DO THESE
@@ -257,7 +257,7 @@ Mother monitors Content Studio via:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jobhuntpro_marketing** (1075 symbols, 2640 relationships, 50 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jobhuntpro_marketing** (1138 symbols, 3125 relationships, 57 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

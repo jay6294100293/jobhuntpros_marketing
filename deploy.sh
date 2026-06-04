@@ -1,16 +1,16 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # deploy.sh — Deploy SwiftPack AI to production server
 # Usage: ./deploy.sh [user@server] [branch]
 #
 # Examples:
-#   ./deploy.sh ubuntu@swiftpackai.tech
-#   ./deploy.sh ubuntu@swiftpackai.tech main
+#   ./deploy.sh root@swiftpackai.tech
+#   ./deploy.sh root@swiftpackai.tech main
 
 set -euo pipefail
 
-SERVER="${1:-ubuntu@swiftpackai.tech}"
+SERVER="${1:-root@swiftpackai.tech}"
 BRANCH="${2:-main}"
-REMOTE_DIR="/home/ubuntu/swiftpackai"
+REMOTE_DIR="/root/swiftpackai"
 
 echo "==> Deploying branch '$BRANCH' to $SERVER"
 
@@ -24,8 +24,8 @@ git checkout "$BRANCH"
 git pull origin "$BRANCH"
 
 echo "--- Verifying secrets file exists ---"
-if [ ! -f /home/ubuntu/secrets/swiftpack.env ]; then
-  echo "ERROR: /home/ubuntu/secrets/swiftpack.env not found."
+if [ ! -f /root/secrets/swiftpack.env ]; then
+  echo "ERROR: /root/secrets/swiftpack.env not found."
   echo "Run server-setup.sh first and populate the secrets file."
   exit 1
 fi

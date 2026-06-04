@@ -1,13 +1,13 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # server-setup.sh — Fresh Ubuntu server setup for SwiftPack AI
 # Run once on a new server as root or with sudo.
-# Usage: sudo bash server-setup.sh
+# Usage: bash server-setup.sh
 
 set -euo pipefail
 
 REPO_URL="https://github.com/YOUR_ORG/swiftpackai.git"
-DEPLOY_DIR="/home/ubuntu/swiftpackai"
-SECRETS_DIR="/home/ubuntu/secrets"
+DEPLOY_DIR="/root/swiftpackai"
+SECRETS_DIR="/root/secrets"
 
 echo "==> SwiftPack AI server setup"
 
