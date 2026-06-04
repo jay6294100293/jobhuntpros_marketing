@@ -63,14 +63,16 @@ export const LogoCreator = () => {
       const a = document.createElement('a');
       a.href = blobUrl;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch {
       toast.error('Download failed');
     }
   };
 
-  const safeName = brandName.replace(/\s+/g, '-').toLowerCase() || 'logo';
+  const safeName = brandName.replace(/\s+/g, '-').replace(/[^a-z0-9-]/gi, '').toLowerCase() || 'logo';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

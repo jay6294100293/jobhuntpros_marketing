@@ -3366,7 +3366,8 @@ async def generate_logo(request: LogoGenerateRequest, user=Depends(get_optional_
         for style_name in [selected] + alternatives:
             fn = _LOGO_TEMPLATES[style_name]
             try:
-                img = await asyncio.get_event_loop().run_in_executor(
+                loop = asyncio.get_running_loop()
+                img = await loop.run_in_executor(
                     None,
                     lambda f=fn, bn=request.brand_name, tl=request.tagline or "", p=primary_rgb, s=secondary_rgb:
                         f(bn, tl, p, s)
@@ -3374,7 +3375,7 @@ async def generate_logo(request: LogoGenerateRequest, user=Depends(get_optional_
                 logo_id = uuid.uuid4().hex[:12]
                 fname = f"logo_{style_name}_{logo_id}.png"
                 fpath = OUTPUTS_DIR / fname
-                await asyncio.get_event_loop().run_in_executor(None, lambda fp=fpath, im=img: im.save(str(fp)))
+                await loop.run_in_executor(None, lambda fp=fpath, im=img: im.save(str(fp)))
                 templates.append({"id": logo_id, "url": f"/api/download/{fname}", "template": style_name})
             except Exception as e:
                 logger.warning(f"Logo template '{style_name}' failed: {e}")
