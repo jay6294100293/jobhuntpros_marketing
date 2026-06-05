@@ -38,6 +38,7 @@ export const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canUseCreative = user?.tier && user.tier !== 'free';
+  const hasFreeTrial = user && !user.free_pro_trial_used;
 
   const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
 
@@ -119,6 +120,20 @@ export const Dashboard = () => {
       </div>
       
       <div className="relative z-10 max-w-3xl mx-auto">
+
+        {/* Free Pro trial banner */}
+        {hasFreeTrial && (
+          <div className="mb-4 flex items-center gap-3 px-5 py-3.5 rounded-xl border border-indigo-500/25 bg-indigo-500/8"
+               style={{ background: 'rgba(99,102,241,0.06)' }}>
+            <span className="text-indigo-400 text-lg">✦</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-semibold text-indigo-300">1 free Pro generation available</span>
+              <span className="text-xs text-zinc-500 ml-2">AI video + music — experience Pro quality before you upgrade</span>
+            </div>
+            <span className="text-xs font-bold text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full flex-shrink-0">FREE TRIAL</span>
+          </div>
+        )}
+
         <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           <div className="space-y-6">
             <div>
@@ -299,11 +314,18 @@ export const Dashboard = () => {
           <div className="mt-8 space-y-6" data-testid="results-section">
             <div className="text-center">
               <h2 className="text-2xl font-heading font-semibold">Your Launch Pack is Ready! 🎉</h2>
-              {usedCreative && (
-                <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                  <span>✦</span> Creative direction applied
-                </span>
-              )}
+              <div className="flex items-center justify-center gap-2 flex-wrap mt-2">
+                {usedCreative && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <span>✦</span> Creative direction applied
+                  </span>
+                )}
+                {results?.pro_trial_used && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                    <span>✦</span> Pro quality used · <Link to="/pricing" className="underline hover:text-violet-300 transition-colors">Upgrade for more</Link>
+                  </span>
+                )}
+              </div>
             </div>
             
             {/* Videos Section */}

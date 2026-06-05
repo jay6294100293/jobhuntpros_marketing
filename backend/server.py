@@ -1837,6 +1837,12 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     # Watermark: free (unauthenticated) users or free-tier users get it burned in.
     # Paid tiers (starter, pro, agency) get clean slides.
     user_tier = user.get("tier", "free") if user else "free"
+    # Free Pro trial: new users get ONE AI video with music to experience Pro quality
+    free_trial_eligible = (
+        user is not None
+        and not user.get("free_pro_trial_used", False)
+        and user_tier not in ("pro", "agency")  # pro/agency always get Modal
+    )
     apply_watermark = user_tier not in ("starter", "pro", "agency")
 
     # If we have fewer real images than needed, generate branded design slides to fill gaps.
@@ -1891,7 +1897,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     # Starter / Pro / Agency get a subtle music bed mixed under the voiceover.
     # Free tier gets raw TTS only (no music).
     # If no .mp3 files are in assets/music_beds/ the step is silently skipped.
-    if audio_path and user_tier in ("starter", "pro", "agency"):
+    if audio_path and (user_tier in ("starter", "pro", "agency") or free_trial_eligible):
         music_bed = _get_random_music_bed()
         if music_bed:
             mixed_audio_path = str(OUTPUTS_DIR / f"{video_id}_mixed_audio.mp3")
@@ -1907,7 +1913,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     # ── Pro/Agency: try Modal LTX-Video GPU ──────────────────────────────────
     # Build a rich visual prompt from the product name + script
     modal_used = False
-    if user_tier in ("pro", "agency") and MODAL_ENABLED:
+    if (user_tier in ("pro", "agency") or free_trial_eligible) and MODAL_ENABLED:
         product_ctx = request.product_name or ""
         prompt_for_modal = (
             f"Professional marketing video for {product_ctx}. "
@@ -1945,6 +1951,12 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
             if result.returncode == 0 and Path(output_path).exists():
                 modal_used = True
                 logger.info("Modal LTX-Video pipeline completed successfully.")
+                # Consume free Pro trial on first successful Modal generation
+                if free_trial_eligible and user:
+                    await db.users.update_one(
+                        {"id": user["id"]},
+                        {"$set": {"free_pro_trial_used": True}}
+                    )
             else:
                 logger.warning(f"FFmpeg loop failed (falling back to slideshow): {result.stderr[-300:]}")
 
@@ -1981,6 +1993,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
         "duration": total_duration,
         "has_audio": audio_path is not None,
         "engine": "ltx-video" if modal_used else "slideshow",
+        "pro_trial_used": modal_used and free_trial_eligible,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "type": "video"
     }
@@ -2374,6 +2387,7 @@ async def register(req: RegisterRequest):
         "google_id": None,
         "stripe_customer_id": None,
         "email_verified": True,
+        "free_pro_trial_used": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one({**user, "_id": user_id})
@@ -2600,6 +2614,7 @@ async def google_oauth_callback(code: str, state: str = "", request: Request = N
             "tier": "free",
             "google_id": google_id,
             "stripe_customer_id": None,
+            "free_pro_trial_used": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one({**user, "_id": user_id})
