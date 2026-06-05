@@ -1,8 +1,9 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -23,8 +24,11 @@ export const Dashboard = () => {
   const [url, setUrl] = useState('');
   const [productName, setProductName] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
+  const [creativeDirection, setCreativeDirection] = useState('');
+  const [showCreative, setShowCreative] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
+  const [usedCreative, setUsedCreative] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -32,6 +36,8 @@ export const Dashboard = () => {
   const stepTimerRef = useRef(null);
   const startTimeRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canUseCreative = user?.tier && user.tier !== 'free';
 
   const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
 
@@ -72,13 +78,16 @@ export const Dashboard = () => {
       return;
     }
 
+    const hasCreative = canUseCreative && creativeDirection.trim().length > 0;
+    setUsedCreative(hasCreative);
     setLoading(true);
     startProgress();
     try {
       const response = await axios.post(`${API}/magic-button`, {
         url,
         product_name: productName,
-        target_audience: targetAudience
+        target_audience: targetAudience,
+        ...(hasCreative ? { creative_direction: creativeDirection.trim() } : {}),
       });
 
       setProgress(100);
@@ -157,6 +166,67 @@ export const Dashboard = () => {
               </div>
             </div>
             
+            {/* ── Creative Direction (Starter+) ── */}
+            <div>
+              {!showCreative ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCreative(true)}
+                  className="flex items-center gap-1.5 text-sm text-zinc-600 hover:text-indigo-400 transition-colors"
+                >
+                  <span className="text-indigo-400 text-base">✦</span>
+                  Add creative direction
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  {!canUseCreative && (
+                    <span className="ml-1 text-xs text-zinc-700">Starter+</span>
+                  )}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                      <span className="text-indigo-400">✦</span>
+                      Creative direction
+                      <span className="text-xs text-zinc-500 font-normal">optional · shapes tone &amp; hook</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCreative(false); setCreativeDirection(''); }}
+                      className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                    >
+                      Remove <ChevronUp className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {!canUseCreative ? (
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500">
+                      Creative direction is available on Starter and above.{' '}
+                      <Link to="/pricing" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+                        Upgrade →
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        value={creativeDirection}
+                        onChange={e => setCreativeDirection(e.target.value.slice(0, 300))}
+                        placeholder='e.g. "Dark, urgent tone. Start with the problem — not the product. End bold with a clear CTA."'
+                        rows={3}
+                        data-testid="creative-direction-input"
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600 resize-none"
+                      />
+                      <div className="flex justify-between items-center text-xs text-zinc-600">
+                        <span>Gemini will weave this into every script</span>
+                        <span className={creativeDirection.length > 270 ? 'text-amber-500' : ''}>
+                          {creativeDirection.length}/300
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleMagicButton}
               disabled={loading}
@@ -227,7 +297,14 @@ export const Dashboard = () => {
         
         {results && (
           <div className="mt-8 space-y-6" data-testid="results-section">
-            <h2 className="text-2xl font-heading font-semibold text-center">Your Launch Pack is Ready! 🎉</h2>
+            <div className="text-center">
+              <h2 className="text-2xl font-heading font-semibold">Your Launch Pack is Ready! 🎉</h2>
+              {usedCreative && (
+                <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <span>✦</span> Creative direction applied
+                </span>
+              )}
+            </div>
             
             {/* Videos Section */}
             {(results.ad_video || results.tutorial_video) && (

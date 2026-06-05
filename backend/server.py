@@ -444,6 +444,7 @@ class MagicButtonRequest(BaseModel):
     url: str
     product_name: str
     target_audience: str
+    creative_direction: Optional[str] = Field(default=None, max_length=300)
 
 class Project(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1611,24 +1612,36 @@ async def delete_upload(file_id: str):
 
 def _build_script_prompt(request: "ScriptRequest") -> str:
     features = ', '.join(request.key_features) if request.key_features else "easy, fast, reliable"
+
+    # Creative direction injection — shapes tone, hook, and energy of the script
+    creative_note = ""
+    if request.brand_context:
+        stripped = request.brand_context.strip()[:300]
+        creative_note = (
+            f"\n\nFounder's creative direction: \"{stripped}\"\n"
+            "Incorporate this vision into the tone, opening hook, and messaging. "
+            "Keep the framework structure but let this direction shape the "
+            "character, energy, and angle of the script."
+        )
+
     frameworks = {
         "PAS": f"""Write a 60-second video ad script for {request.product_name} using Problem-Agitate-Solution.
 Target audience: {request.target_audience}
 Key features: {features}
 Structure: Problem (15s) → Agitate (20s) → Solution (25s) with CTA.
-Be conversational and authentic. Return only the script text.""",
+Be conversational and authentic. Return only the script text.{creative_note}""",
 
         "Step-by-Step": f"""Write a 60-second tutorial script for {request.product_name}.
 Target audience: {request.target_audience}
 Key features: {features}
 Structure: Intro (10s) → 3 clear steps (40s) → Encouragement + CTA (10s).
-Be simple and encouraging. Return only the script text.""",
+Be simple and encouraging. Return only the script text.{creative_note}""",
 
         "Before/After": f"""Write a 60-second Before/After transformation script for {request.product_name}.
 Target audience: {request.target_audience}
 Key features: {features}
 Structure: Before struggle (20s) → Discovery (10s) → After transformation (30s).
-Be emotional and aspirational. Return only the script text.""",
+Be emotional and aspirational. Return only the script text.{creative_note}""",
     }
     return frameworks.get(request.framework, frameworks["PAS"])
 
@@ -2154,11 +2167,13 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
     brand_data = await scrape_url(url=request.url)
 
     # Step 2 & 3: Scripts
+    # creative_direction is passed as brand_context → injected into Gemini prompt
     script_req = ScriptRequest(
         framework="PAS",
         product_name=request.product_name,
         target_audience=request.target_audience,
-        key_features=brand_data["features"][:3] or ["easy", "fast", "reliable"]
+        key_features=brand_data["features"][:3] or ["easy", "fast", "reliable"],
+        brand_context=request.creative_direction or None,
     )
     ad_script = await generate_script(script_req, user=None)
 
