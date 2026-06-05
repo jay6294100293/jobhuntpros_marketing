@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Zap, FileText, Image, Video, ArrowRight, Check } from 'lucide-react';
+import { Sparkles, Zap, FileText, Image, Video, ArrowRight, Check, Palette } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────
    LaunchBusiness AI — Landing Page
@@ -85,7 +85,7 @@ export function Landing() {
       name: 'Free',
       price: '0',
       desc: 'Try LaunchBusiness AI with no commitment.',
-      features: ['3 videos lifetime', '5 scripts lifetime', '9:16 format only', 'LaunchBusiness AI watermark'],
+      features: ['Logo creator (free, all styles)', '3 videos lifetime', '5 scripts lifetime', '9:16 format only', 'LaunchBusiness AI watermark'],
       cta: 'Start free',
       featured: false,
     },
@@ -93,7 +93,7 @@ export function Landing() {
       name: 'Starter',
       price: '19',
       desc: 'For founders launching every week.',
-      features: ['15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed'],
+      features: ['Logo creator + AI concepts', '15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed'],
       cta: 'Get Starter',
       featured: true,
     },
@@ -176,7 +176,7 @@ export function Landing() {
             style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            Now live — AI-powered launch packs
+            Now live — Logo + full launch pack in 90 seconds
           </div>
         </div>
 
@@ -218,9 +218,9 @@ export function Landing() {
             marginBottom: 40,
           }}
         >
-          Paste any product URL. LaunchBusiness AI generates 2 videos, 2 scripts,
-          and 2 posters — ready to post on every platform. What agencies charge
-          $400–1,900 for. In 90 seconds.
+          Start with your brand logo. Then paste your product URL and get 2 videos,
+          2 scripts, and 2 posters — everything you need to launch. What agencies
+          charge $400–1,900 for. In 90 seconds.
         </p>
 
         <div ref={addRef} style={{ ...revealStyle(0.4), display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 64 }}>
@@ -285,8 +285,9 @@ export function Landing() {
           </div>
 
           {/* Output grid */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {[
+              { icon: <Palette className="w-4 h-4" />, label: 'Logo', count: '✦', color: '#f0abfc' },
               { icon: <Video className="w-4 h-4" />, label: 'Videos', count: '2×', color: '#818cf8' },
               { icon: <FileText className="w-4 h-4" />, label: 'Scripts', count: '2×', color: '#a78bfa' },
               { icon: <Image className="w-4 h-4" />, label: 'Posters', count: '2×', color: '#c4b5fd' },
@@ -323,7 +324,7 @@ export function Landing() {
         <div className="max-w-4xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
             { num: '90s', label: 'Average generation time' },
-            { num: '6×', label: 'Assets per URL' },
+            { num: '7×', label: 'Assets per URL' },
             { num: '$0', label: 'Cost on free tier' },
             { num: '3', label: 'Script frameworks' },
           ].map(s => (
@@ -349,9 +350,9 @@ export function Landing() {
 
         <div className="grid md:grid-cols-3 gap-6 mt-14">
           {[
-            { n: '01', title: 'Paste your URL', desc: 'Drop in your product URL. LaunchBusiness AI extracts brand colors, headlines, and features automatically.' },
-            { n: '02', title: 'AI builds everything', desc: 'Gemini writes the scripts. Neural voice records audio. LTX-Video assembles the videos. Pillow designs the posters.' },
-            { n: '03', title: 'Download and post', desc: 'Get 2 videos, 2 scripts, and 2 posters — ready for TikTok, YouTube, Instagram, and LinkedIn.' },
+            { n: '01', title: 'Create your logo', desc: 'Generate your brand logo first — AI templates or Ideogram AI. Pick a style, your colors, done in seconds.' },
+            { n: '02', title: 'Paste your URL', desc: 'Drop in your product URL. LaunchBusiness AI extracts brand colors, headlines, and features — then builds everything.' },
+            { n: '03', title: 'Download and post', desc: 'Get your logo + 2 videos, 2 scripts, and 2 posters — ready for TikTok, YouTube, Instagram, and LinkedIn.' },
           ].map((step, i) => (
             <div
               key={i}
@@ -393,6 +394,7 @@ export function Landing() {
           </div>
           <div className="grid md:grid-cols-2 gap-5">
             {[
+              { icon: <Palette className="w-5 h-5" />, title: 'Logo Creator', desc: '6 AI-powered logo templates + Ideogram AI concepts. Pick your colors and style — get a 1024×1024 brand logo in seconds, before you launch anything.' },
               { icon: <Video className="w-5 h-5" />, title: 'AI Video Generation', desc: 'LTX-Video on Modal A100 GPU generates cinematic product videos for Pro/Agency users. Free tier gets polished animated slideshows with Edge TTS voiceover.' },
               { icon: <FileText className="w-5 h-5" />, title: '3 Script Frameworks', desc: 'PAS (Problem-Agitate-Solve), Step-by-Step tutorial, and Before/After transformation — Gemini AI writes all three in seconds from your URL.' },
               { icon: <Image className="w-5 h-5" />, title: 'Brand-Matched Posters', desc: 'Extracts your brand colors, fonts, and messaging from any URL. Every poster is designed to match your product identity.' },
