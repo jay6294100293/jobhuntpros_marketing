@@ -1,5 +1,5 @@
-# SwiftPack AI — Product Strategy & Business Model
-# Last updated: May 2026 (source of truth for all sessions)
+# LaunchBusiness AI — Product Strategy & Business Model
+# Last updated: June 2026 (source of truth for all sessions)
 
 ---
 
@@ -14,9 +14,12 @@ The free tier shows our ceiling. Users judge quality once, then decide to pay.
 ## Core Output (Magic Button)
 
 One click on any product URL produces:
+- 1 brand logo (AI templates or Ideogram AI concepts)
 - 2 AI videos (9:16 TikTok ad + 16:9 YouTube tutorial)
 - 2 scripts (PAS ad script + Step-by-Step tutorial)
 - 2 social posters (1:1 + 9:16)
+
+Total: 7 assets per Magic Button click.
 
 ---
 
@@ -34,11 +37,13 @@ One click on any product URL produces:
 - ~~Watermark burned into slide design~~ ✅ diagonal RGBA stamps, content area
 - ~~Background music bed~~ ✅ FFmpeg amix, royalty-free .mp3, ducked -18dB under voice (paid tiers only)
 
-### Pro tier target (GPU-powered via Modal.com)
-- LTX-Video (Lightricks, Apache 2.0) — real AI video backgrounds
-- SadTalker — user photo → lip-synced talking head presenter
-- Pre-made animated 2D characters (fallback when no photo)
-- Priority queue (2x faster processing)
+### Pro tier target (GPU-powered via Modal.com) — REVISED June 2026
+- ~~LTX-Video~~ → REPLACED by SVD (Stable Video Diffusion) image-to-video
+  Reason: LTX generates generic footage. SVD animates actual product slides.
+  See docs/VIDEO_PIPELINE.md for full decision log.
+- Creative direction input (Phase 1 — script only, no GPU)
+- AI-animated slides on Pro (Phase 2 — SVD on Modal A100)
+- Talking head (Phase 3 — requires Modal + SadTalker deploy + ID verification)
 
 ---
 
@@ -254,12 +259,22 @@ Permanent account ban on violation.
 5. ~~Explicit consent timestamped in DB~~ ✅ — POST /api/talking-head/consent, photo_hash keyed
 6. **To activate**: run `modal deploy backend/modal_sadtalker.py`
 
-### Phase 5 — Scale (next)
-1. **AppSumo LTD launch** — activate Stripe + Modal first so product is fully live
-2. Agency tier white label — remove SwiftPack AI branding for agency accounts
+### Phase 5 — Creative Direction Input (next — see docs/VIDEO_PIPELINE.md)
+1. Optional creative direction field on Dashboard (Starter+ only)
+2. Feeds into Gemini prompt for better-tailored scripts
+3. No GPU required — same FFmpeg video, better copy
+4. Build time: ~3 hours
+
+### Phase 6 — AI-Animated Slides on Pro (after Modal setup)
+1. Activate Modal: add MODAL_TOKEN_ID + MODAL_TOKEN_SECRET to secrets
+2. Replace SVD for Pro: Pillow slides → SVD image-to-video → animated clips
+3. Creative direction on Pro triggers SVD (+5 credits)
+
+### Phase 7 — Scale
+1. **AppSumo LTD launch** — activate Stripe + Modal first
+2. Agency white label — remove LaunchBusiness AI branding
 3. API access for agencies
-4. ~~Background music bed~~ ✅ Done — needs royalty-free .mp3 files populated
-5. Annual pricing discounts (20% off)
+4. Annual pricing (20% off)
 
 ---
 

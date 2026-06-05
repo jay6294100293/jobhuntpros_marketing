@@ -1,5 +1,6 @@
-# SwiftPack AI — Video Generation Features
-# Last updated: April 2026
+# LaunchBusiness AI — Video Generation Features (Current FFmpeg Pipeline)
+# Last updated: June 2026
+# For full roadmap including AI video plans → see VIDEO_PIPELINE.md
 
 ---
 
