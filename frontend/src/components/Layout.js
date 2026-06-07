@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, Home, Upload, Wand2, Image, FolderOpen, LogOut, Zap, Tag, Palette } from 'lucide-react';
+import { Sparkles, Home, Upload, Wand2, Image, FolderOpen, LogOut, Zap, Tag, Palette, Scale } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ export const Layout = ({ children }) => {
     { name: 'Create', href: '/create', icon: Image },
     { name: 'Gallery', href: '/gallery', icon: FolderOpen },
     { name: 'Logo', href: '/logo', icon: Palette },
+    { name: 'Legal', href: '/legal', icon: Scale },
   ];
 
   const handleLogout = () => {

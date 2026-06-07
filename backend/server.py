@@ -2445,6 +2445,26 @@ async def me(user = Depends(get_current_user)):
     }
     safe["identity_verified"] = bool(user.get("identity_verified"))
     safe["has_agreed"] = bool(agreement)
+
+    # Legal credits info
+    from legal_router import LEGAL_TIER_CONFIG, _year_month  # late import
+    legal_cfg = LEGAL_TIER_CONFIG.get(tier, LEGAL_TIER_CONFIG["free"])
+    legal_ym = _year_month()
+    legal_usage_doc = await db.legal_credits_usage.find_one(
+        {"user_id": user["id"], "year_month": legal_ym}
+    ) or {}
+    legal_monthly_used = legal_usage_doc.get("credits_used", 0)
+    legal_monthly_remaining = max(0, legal_cfg["monthly_credits"] - legal_monthly_used)
+    legal_topup = user.get("legal_credits_topup", 0)
+    safe["legal"] = {
+        "monthly_credits": legal_cfg["monthly_credits"],
+        "monthly_used": legal_monthly_used,
+        "monthly_remaining": legal_monthly_remaining,
+        "topup": legal_topup,
+        "total_available": legal_monthly_remaining + legal_topup,
+        "max_profiles": legal_cfg["max_profiles"],
+        "can_generate": tier != "free",
+    }
     return safe
 
 
@@ -3439,6 +3459,7 @@ async def get_saved_logos(user=Depends(get_current_user)):
 
 
 from jarvis_router import router as jarvis_router  # noqa: E402
+from legal_router import legal_router  # noqa: E402
 
 app.include_router(api_router)
 app.include_router(auth_router)
@@ -3446,6 +3467,7 @@ app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(talking_router)
 app.include_router(jarvis_router)
+app.include_router(legal_router)
 
 
 @app.on_event("shutdown")
