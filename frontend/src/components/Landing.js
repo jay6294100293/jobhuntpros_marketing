@@ -468,25 +468,35 @@ export function Landing() {
                   Most popular
                 </div>
               )}
-              <div className="text-xs font-bold tracking-widest uppercase text-zinc-500 mb-4">{plan.name}</div>
-              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 52, letterSpacing: '-2px', color: '#fafafa', lineHeight: 1 }}>
-                <sup style={{ fontSize: 22, verticalAlign: 'super' }}>$</sup>
+              {/* Plan name */}
+              <div className="text-xs font-bold tracking-widest uppercase text-zinc-500 mb-3">{plan.name}</div>
+
+              {/* Price */}
+              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 48, letterSpacing: '-2px', color: '#fafafa', lineHeight: 1 }}>
+                <sup style={{ fontSize: 20, verticalAlign: 'super' }}>$</sup>
                 {plan.price}
-                <sub style={{ fontSize: 15, fontWeight: 400, color: '#71717a', letterSpacing: 0 }}>/mo</sub>
+                <sub style={{ fontSize: 14, fontWeight: 400, color: '#71717a', letterSpacing: 0 }}>/mo</sub>
               </div>
-              <p className="text-sm text-zinc-500 mt-3 mb-6">{plan.desc}</p>
-              <ul className="space-y-3 mb-8">
+              <p className="text-sm text-zinc-500 mt-2">{plan.desc}</p>
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '20px 0 16px' }} />
+
+              {/* Features — flex-1 pushes button down */}
+              <ul className="space-y-3 flex-1">
                 {plan.features.map((f, j) => (
-                  <li key={j} className="flex items-center gap-3 text-sm text-zinc-400">
-                    <Check className="w-4 h-4 flex-shrink-0 text-indigo-400" />
+                  <li key={j} className="flex items-start gap-3 text-sm text-zinc-400">
+                    <Check className="w-4 h-4 flex-shrink-0 text-indigo-400 mt-0.5" />
                     {f}
                   </li>
                 ))}
               </ul>
+
+              {/* CTA */}
               <Link
                 to="/register"
                 className="block w-full text-center py-3 rounded-lg text-sm font-semibold no-underline transition-all active:scale-95"
-                style={{ marginTop: 'auto', ...(plan.featured
+                style={{ marginTop: '24px', ...(plan.featured
                   ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', boxShadow: '0 0 20px rgba(99,102,241,0.3)' }
                   : { background: 'rgba(39,39,42,0.6)', border: '1px solid rgba(255,255,255,0.08)', color: '#a1a1aa' }
                 ) }
