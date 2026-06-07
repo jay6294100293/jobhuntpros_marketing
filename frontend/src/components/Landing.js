@@ -452,6 +452,8 @@ export function Landing() {
                 position: 'relative',
                 borderRadius: 16,
                 padding: '28px 24px',
+                display: 'flex',
+                flexDirection: 'column',
                 ...(plan.featured
                   ? { background: 'linear-gradient(145deg, rgba(99,102,241,0.15), rgba(139,92,246,0.08))', border: '1px solid rgba(99,102,241,0.35)', boxShadow: '0 0 40px rgba(99,102,241,0.12)' }
                   : { background: 'rgba(24,24,27,0.4)', border: '1px solid rgba(255,255,255,0.06)' }
@@ -484,10 +486,10 @@ export function Landing() {
               <Link
                 to="/register"
                 className="block w-full text-center py-3 rounded-lg text-sm font-semibold no-underline transition-all active:scale-95"
-                style={plan.featured
+                style={{ marginTop: 'auto', ...(plan.featured
                   ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', boxShadow: '0 0 20px rgba(99,102,241,0.3)' }
                   : { background: 'rgba(39,39,42,0.6)', border: '1px solid rgba(255,255,255,0.08)', color: '#a1a1aa' }
-                }
+                ) }
               >
                 {plan.cta}
               </Link>
