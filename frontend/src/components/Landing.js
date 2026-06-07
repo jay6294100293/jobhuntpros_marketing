@@ -288,7 +288,7 @@ export function Landing() {
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.boxShadow = '0 16px 48px rgba(99,102,241,0.08)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
-              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 42, color: 'rgba(99,102,241,0.18)', lineHeight: 1, marginBottom: 18 }}>{step.n}</div>
+              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 42, color: 'rgba(129,140,248,0.55)', lineHeight: 1, marginBottom: 18 }}>{step.n}</div>
               <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#fafafa', marginBottom: 8 }}>{step.title}</div>
               <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.6 }}>{step.desc}</p>
             </div>
