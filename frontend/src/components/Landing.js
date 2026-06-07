@@ -127,7 +127,7 @@ export function Landing() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative flex flex-col items-center justify-center text-center px-6 pt-32 pb-24 overflow-hidden min-h-screen">
+      <section className="relative flex flex-col items-center justify-center text-center px-6 pt-24 pb-16 overflow-hidden min-h-screen">
         <div className="absolute top-0 left-1/2 pointer-events-none" style={{ transform: `translateX(-50%) translateY(${scrollY * 0.15}px)`, width: 900, height: 550, background: 'radial-gradient(ellipse, rgba(99,102,241,0.16) 0%, rgba(139,92,246,0.07) 50%, transparent 70%)', filter: 'blur(50px)' }} />
 
         <div ref={addRef} style={rv(0.1)}>
@@ -137,27 +137,73 @@ export function Landing() {
           </div>
         </div>
 
-        <h1 ref={addRef} style={{ ...rv(0.2), fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(40px, 5.5vw, 76px)', letterSpacing: '-2.5px', lineHeight: 1.06, maxWidth: 860, marginBottom: 24 }}>
+        <h1 ref={addRef} style={{ ...rv(0.2), fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(36px, 5vw, 68px)', letterSpacing: '-2.5px', lineHeight: 1.06, maxWidth: 820, marginBottom: 20 }}>
           From URL to launch-ready.{' '}
           <span style={GRD}>Marketing + legal,</span>{' '}
           covered.
         </h1>
 
-        <p ref={addRef} style={{ ...rv(0.3), fontSize: 18, lineHeight: 1.65, color: '#a1a1aa', maxWidth: 560, marginBottom: 16 }}>
-          Paste your product URL — get videos, scripts, and posters in 90 seconds.
-          Then generate all your business legal documents with an AI that knows 2026 law.
-        </p>
-        <p ref={addRef} style={{ ...rv(0.32), fontSize: 14, color: '#52525b', marginBottom: 40 }}>
-          What agencies charge $400–1,900 for. What lawyers charge $5,000+ for. Now in minutes.
+        {/* ── Feature pills — visible without scrolling ── */}
+        <div ref={addRef} style={{ ...rv(0.25), display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, maxWidth: 680, marginBottom: 20 }}>
+          {[
+            { icon: <Palette className="w-3 h-3" />, label: 'Logo Creator' },
+            { icon: <Video className="w-3 h-3" />, label: 'AI Video + Voiceover' },
+            { icon: <Wand2 className="w-3 h-3" />, label: '3 Script Frameworks' },
+            { icon: <Image className="w-3 h-3" />, label: 'Brand Posters' },
+            { icon: <Scale className="w-3 h-3" />, label: '28 Legal Documents' },
+            { icon: <Shield className="w-3 h-3" />, label: 'GDPR · PIPEDA · CCPA' },
+            { icon: <MessageSquare className="w-3 h-3" />, label: 'AI Intake Chat' },
+            { icon: <Globe className="w-3 h-3" />, label: 'URL Intelligence' },
+          ].map(f => (
+            <span key={f.label} className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border" style={{ background: 'rgba(39,39,42,0.7)', borderColor: 'rgba(255,255,255,0.08)', color: '#a1a1aa' }}>
+              <span style={{ color: '#818cf8' }}>{f.icon}</span>{f.label}
+            </span>
+          ))}
+        </div>
+
+        <p ref={addRef} style={{ ...rv(0.3), fontSize: 17, lineHeight: 1.6, color: '#71717a', maxWidth: 520, marginBottom: 28 }}>
+          Paste a URL → marketing pack in 90s. Tell the AI about your business → legal documents tailored to your jurisdiction. What used to cost $400–$6,900. Now in minutes.
         </p>
 
-        <div ref={addRef} style={{ ...rv(0.4), display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 64 }}>
+        <div ref={addRef} style={{ ...rv(0.4), display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 28 }}>
           <Link to="/register" className="flex items-center gap-2 px-7 py-3.5 text-base font-semibold text-white rounded-lg no-underline active:scale-95 transition-all" style={{ ...BTN_PRIMARY, fontSize: 15 }}>
             <Zap className="w-4 h-4" /> Create free account
           </Link>
           <Link to="/login" className="flex items-center gap-2 px-7 py-3.5 text-sm font-medium text-zinc-300 rounded-lg no-underline transition-all border border-zinc-800 hover:border-zinc-600 hover:text-white" style={{ fontSize: 15 }}>
             Sign in <ArrowRight className="w-4 h-4" />
           </Link>
+        </div>
+
+        {/* ── 3-column value trio — what each pillar delivers ── */}
+        <div ref={addRef} style={{ ...rv(0.42), display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, width: '100%', maxWidth: 680, marginBottom: 28 }}>
+          {[
+            {
+              color: '#818cf8',
+              title: '🚀 Marketing Pack',
+              items: ['Brand logo · AI templates', 'Videos with neural voiceover', 'PAS + tutorial scripts', 'Brand-matched posters'],
+            },
+            {
+              color: '#6ee7b7',
+              title: '⚖️ Legal Documents',
+              items: ['28 document types', 'GDPR · PIPEDA · CCPA', '2026 law — fetched live', 'AI intake chat, not forms'],
+            },
+            {
+              color: '#a78bfa',
+              title: '⚡ All in One Platform',
+              items: ['No agencies needed', 'No lawyers on retainer', 'Free tier to start', 'Credits never expire'],
+            },
+          ].map(col => (
+            <div key={col.title} style={{ background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '14px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: col.color, marginBottom: 8, fontFamily: "'Outfit', sans-serif" }}>{col.title}</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {col.items.map(item => (
+                  <li key={item} style={{ fontSize: 11, color: '#71717a', marginBottom: 4, display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                    <span style={{ color: col.color, marginTop: 1, flexShrink: 0 }}>›</span>{item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
         {/* Demo card */}
@@ -176,19 +222,20 @@ export function Landing() {
             <button className="px-4 py-1.5 text-xs font-semibold text-white rounded-md" style={BTN_PRIMARY}>Generate ✦</button>
           </div>
 
-          {/* Output grid — 5 outputs */}
+          {/* Output grid — 5 outputs with subtitles */}
           <div className="grid grid-cols-5 gap-3">
             {[
-              { icon: <Palette className="w-4 h-4" />, label: 'Logo', val: '✦', color: '#f0abfc' },
-              { icon: <Video className="w-4 h-4" />, label: 'Videos', val: '2×', color: '#818cf8' },
-              { icon: <FileText className="w-4 h-4" />, label: 'Scripts', val: '2×', color: '#a78bfa' },
-              { icon: <Image className="w-4 h-4" />, label: 'Posters', val: '2×', color: '#c4b5fd' },
-              { icon: <Scale className="w-4 h-4" />, label: 'Legal', val: '28+', color: '#6ee7b7' },
+              { icon: <Palette className="w-4 h-4" />, label: 'Logo', sub: 'AI templates', val: '✦', color: '#f0abfc' },
+              { icon: <Video className="w-4 h-4" />, label: 'Videos', sub: 'Ad + Tutorial', val: '2×', color: '#818cf8' },
+              { icon: <FileText className="w-4 h-4" />, label: 'Scripts', sub: 'PAS + Step', val: '2×', color: '#a78bfa' },
+              { icon: <Image className="w-4 h-4" />, label: 'Posters', sub: 'Brand-matched', val: '2×', color: '#c4b5fd' },
+              { icon: <Scale className="w-4 h-4" />, label: 'Legal', sub: 'GDPR ready', val: '28+', color: '#6ee7b7' },
             ].map(item => (
-              <div key={item.label} className="flex flex-col gap-2 rounded-lg p-3 transition-all hover:scale-105 cursor-default" style={{ background: 'rgba(39,39,42,0.5)', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div key={item.label} className="flex flex-col gap-1.5 rounded-lg p-3 transition-all hover:scale-105 cursor-default" style={{ background: 'rgba(39,39,42,0.5)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <span style={{ color: item.color }}>{item.icon}</span>
-                <span className="text-xs font-medium text-zinc-400">{item.label}</span>
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 20, color: item.color }}>{item.val}</span>
+                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 18, color: item.color, lineHeight: 1 }}>{item.val}</span>
+                <span className="text-xs font-semibold text-zinc-300">{item.label}</span>
+                <span style={{ fontSize: 10, color: '#52525b', lineHeight: 1.3 }}>{item.sub}</span>
               </div>
             ))}
           </div>
