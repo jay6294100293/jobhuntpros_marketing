@@ -23,12 +23,11 @@ services:
     env_file:
       - /root/secrets/swiftpack.env
     environment:
-      - MONGO_URL=mongodb://mongo:27017
-      - DB_NAME=swiftpackai_db
+      - MONGODB_URL=mongodb://mongo:27017
+      - DB_NAME=launchbusinessai_db
       - BACKEND_URL=https://launchbusinessai.com
       - FRONTEND_URL=https://launchbusinessai.com
-      - CORS_ORIGINS=https://launchbusinessai.com,https://www.launchbusinessai.com,https://swiftpackai.tech,https://www.swiftpackai.tech
-      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/tts-key.json
+      - CORS_ORIGINS=https://launchbusinessai.com,https://www.launchbusinessai.com
     depends_on:
       - mongo
     expose:
@@ -36,7 +35,6 @@ services:
     volumes:
       - backend_outputs:/app/outputs
       - backend_uploads:/app/uploads
-      - /root/secrets/swiftpack-tts-key.json:/run/secrets/tts-key.json:ro
 
   frontend:
     build:
