@@ -2803,15 +2803,28 @@ async def stripe_webhook_handler(request: Request):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        user_id = session.get("metadata", {}).get("user_id")
-        target_tier = session.get("metadata", {}).get("target_tier", "pro")
+        metadata = session.get("metadata", {})
+        user_id = metadata.get("user_id")
         customer_id = session.get("customer")
-        if user_id:
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
-            )
-            logger.info(f"User {user_id} upgraded to {target_tier}")
+
+        if metadata.get("type") == "legal_topup":
+            # ── Legal credit topup (one-time payment) ──
+            credits = int(metadata.get("credits", 0))
+            if user_id and credits > 0:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$inc": {"legal_credits_topup": credits}}
+                )
+                logger.info(f"Legal topup: user {user_id} received {credits} credits")
+        else:
+            # ── Subscription upgrade ──
+            target_tier = metadata.get("target_tier", "pro")
+            if user_id:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
+                )
+                logger.info(f"User {user_id} upgraded to {target_tier}")
 
     elif event["type"] == "customer.subscription.updated":
         sub = event["data"]["object"]

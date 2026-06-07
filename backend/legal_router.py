@@ -684,3 +684,99 @@ Generate the complete, up-to-date {doc_name} now. Apply all 2026 regulatory upda
 @legal_router.get("/credits")
 async def get_credits(user=Depends(_auth)):
     return await _get_credits_info(user)
+
+# ─── Topup packages ───────────────────────────────────────────────────────────
+
+TOPUP_PACKAGES = {
+    "topup_15": {"credits": 15, "price_usd": 500,  "label": "15 credits",  "tag": ""},
+    "topup_35": {"credits": 35, "price_usd": 1000, "label": "35 credits",  "tag": "Best value"},
+    "topup_80": {"credits": 80, "price_usd": 2000, "label": "80 credits",  "tag": "Best for agencies"},
+}
+
+
+@legal_router.get("/topup/packages")
+async def topup_packages(user=Depends(_auth)):
+    """Return available topup packages. Free users see them but can't purchase."""
+    credits_info = await _get_credits_info(user)
+    return {
+        "packages": [
+            {
+                "id": pkg_id,
+                "credits": pkg["credits"],
+                "price_usd": pkg["price_usd"] / 100,   # dollars
+                "price_cents": pkg["price_usd"],
+                "label": pkg["label"],
+                "tag": pkg["tag"],
+                "value": round(pkg["price_usd"] / pkg["credits"], 1),  # cents per credit
+            }
+            for pkg_id, pkg in TOPUP_PACKAGES.items()
+        ],
+        "current_credits": credits_info["total_available"],
+    }
+
+
+@legal_router.post("/topup/checkout")
+async def topup_checkout(body: TopupRequest, user=Depends(_auth)):
+    """
+    Create a Stripe one-time payment session for legal credit topup.
+    body.credits must match one of the TOPUP_PACKAGES credit amounts.
+    """
+    import stripe as stripe_lib_local
+
+    from server import STRIPE_SECRET_KEY, FRONTEND_URL  # late import
+
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured. Contact support.")
+
+    if user.get("tier", "free") == "free":
+        raise HTTPException(
+            status_code=403,
+            detail="Credit topups require an active paid plan.",
+        )
+
+    # Find matching package by credit count
+    pkg = next(
+        (p for p in TOPUP_PACKAGES.values() if p["credits"] == body.credits),
+        None,
+    )
+    if not pkg:
+        valid = sorted(set(p["credits"] for p in TOPUP_PACKAGES.values()))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid credit amount. Choose from: {valid}",
+        )
+
+    try:
+        import stripe as _stripe
+        _stripe.api_key = STRIPE_SECRET_KEY
+
+        session = _stripe.checkout.Session.create(
+            customer_email=user["email"],
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": pkg["price_usd"],
+                    "product_data": {
+                        "name": f"LaunchBusiness AI — {pkg['label']} (Legal Documents)",
+                        "description": (
+                            f"{pkg['credits']} legal document credits. "
+                            "Credits are added to your account immediately after payment "
+                            "and never expire."
+                        ),
+                    },
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"{FRONTEND_URL}/legal?topup=success&credits={pkg['credits']}",
+            cancel_url=f"{FRONTEND_URL}/legal",
+            metadata={
+                "type": "legal_topup",
+                "user_id": user["id"],
+                "credits": str(pkg["credits"]),
+            },
+        )
+        return {"checkout_url": session.url, "credits": pkg["credits"]}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not create payment session: {str(e)}")

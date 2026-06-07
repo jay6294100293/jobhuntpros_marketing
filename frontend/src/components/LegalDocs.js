@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Scale, Building2, MessageSquare, FileText, FolderOpen,
-  ChevronRight, ArrowLeft, Zap, Lock
+  ChevronRight, ArrowLeft, Zap, Lock, Plus
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ import ProfileManager from './legal/ProfileManager';
 import ChatIntake from './legal/ChatIntake';
 import DocumentCatalog from './legal/DocumentCatalog';
 import DocumentVault from './legal/DocumentVault';
+import TopupModal from './legal/TopupModal';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -23,11 +25,14 @@ const DISCLAIMER_TEXT =
   'before signing, publishing, or relying on them.';
 
 export default function LegalDocs() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [profiles, setProfiles] = useState([]);
   const [activeProfile, setActiveProfile] = useState(null);
   const [view, setView] = useState('profiles'); // profiles | profile_home | chat | catalog | vault
   const [loadingProfiles, setLoadingProfiles] = useState(true);
+  const [showTopup, setShowTopup] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(
     () => localStorage.getItem('legal_disclaimer_accepted') === '1'
   );
@@ -48,6 +53,17 @@ export default function LegalDocs() {
     };
     load();
   }, []);
+
+  // Handle Stripe topup return URL: /legal?topup=success&credits=35
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('topup') === 'success') {
+      const credits = params.get('credits');
+      toast.success(`${credits} legal credits added to your account!`);
+      refresh?.(); // refresh user object so credit balance updates
+      navigate('/legal', { replace: true }); // strip query params
+    }
+  }, [location.search]);
 
   const acceptDisclaimer = () => {
     localStorage.setItem('legal_disclaimer_accepted', '1');
@@ -136,16 +152,27 @@ export default function LegalDocs() {
           </div>
         </div>
 
-        {/* Credit display */}
+        {/* Credit display + topup */}
         {user?.legal && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/60 rounded-xl border border-zinc-700">
-            <Zap className="w-4 h-4 text-indigo-400" />
-            <span className="text-sm text-zinc-300">
-              <span className="font-semibold text-white">{user.legal.total_available}</span>
-              <span className="text-zinc-500"> credits available</span>
-            </span>
-            {user.tier === 'free' && (
-              <Lock className="w-3.5 h-3.5 text-zinc-600 ml-1" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/60 rounded-xl border border-zinc-700">
+              <Zap className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm text-zinc-300">
+                <span className="font-semibold text-white">{user.legal.total_available}</span>
+                <span className="text-zinc-500"> credits</span>
+              </span>
+              {user.tier === 'free' && (
+                <Lock className="w-3.5 h-3.5 text-zinc-600 ml-1" />
+              )}
+            </div>
+            {user.tier !== 'free' && (
+              <button
+                onClick={() => setShowTopup(true)}
+                title="Buy more credits"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" /> Buy credits
+              </button>
             )}
           </div>
         )}
@@ -286,6 +313,7 @@ export default function LegalDocs() {
           profile={activeProfile}
           user={user}
           onGenerate={handleGenerated}
+          onBuyCredits={() => setShowTopup(true)}
         />
       )}
 
@@ -293,6 +321,9 @@ export default function LegalDocs() {
       {view === 'vault' && activeProfile && (
         <DocumentVault profile={activeProfile} />
       )}
+
+      {/* Topup modal */}
+      {showTopup && <TopupModal onClose={() => setShowTopup(false)} />}
     </div>
   );
 }

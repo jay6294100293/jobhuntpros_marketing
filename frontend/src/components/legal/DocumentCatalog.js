@@ -24,7 +24,7 @@ function CreditBadge({ credits }) {
   );
 }
 
-export default function DocumentCatalog({ profile, user, onGenerate }) {
+export default function DocumentCatalog({ profile, user, onGenerate, onBuyCredits }) {
   const [catalog, setCatalog] = useState({});
   const [credits, setCredits] = useState(null);
   const [selected, setSelected] = useState(new Set());
@@ -261,9 +261,15 @@ export default function DocumentCatalog({ profile, user, onGenerate }) {
           {/* Not enough credits warning */}
           {selected.size > 0 && !canAfford && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 mb-3">
-              <p className="text-xs text-red-400">
-                Need {totalCreditsNeeded - available} more credits. Purchase a topup or wait for monthly renewal.
+              <p className="text-xs text-red-400 mb-2">
+                Need {totalCreditsNeeded - available} more credits.
               </p>
+              <button
+                onClick={onBuyCredits}
+                className="text-xs text-indigo-400 hover:text-indigo-300 underline transition-colors"
+              >
+                Buy credits →
+              </button>
             </div>
           )}
 
