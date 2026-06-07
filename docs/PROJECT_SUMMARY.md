@@ -1,82 +1,76 @@
-﻿# SwiftPack AI — Project Summary
-# Last updated: May 2026
+# LaunchBusiness AI — Project Summary
+# Last updated: June 2026
 
 ---
 
 ## What It Is
 
-SwiftPack AI turns any product URL into a complete marketing launch pack in 90 seconds.
+LaunchBusiness AI is a two-pillar platform for founders:
 
-**Input:** Website URL + Product Name + Target Audience
-**Output:** 2 videos + 2 scripts + 2 posters — ready to post
+**Pillar 1 — Marketing Launch Pack:** Paste a product URL → get logo + 2 videos + 2 scripts + 2 posters in 90 seconds.
 
-**Live at:** https://swiftpackai.tech
-**Company:** NovaJay Tech (novajaytech.com)
-**Repo:** https://github.com/jay6294100293/jobhuntpros_marketing
+**Pillar 2 — Legal Documents:** AI intake chat → select from 28 document types → generate jurisdiction-aware legal drafts grounded in 2026 law.
+
+**Live at:** https://launchbusinessai.com  
+**Company:** NovaJay Tech (novajaytech.com)  
+**Repo:** https://github.com/jay6294100293/jobhuntpros_marketing  
+**Server:** Contabo VPS · root@YOUR_SERVER_IP · /root/swiftpack  
 
 ---
 
-## Current State (May 2026)
+## Current State (June 2026)
 
-**100% code-complete. All 8 priorities implemented.**
+### ✅ Marketing Features (all complete)
 
-**Working in production (Priorities 1–8 complete):**
-- Magic Button full pipeline (scrape → scripts → videos → posters)
-- JWT authentication
-- **Open public registration** — `POST /api/auth/register` (password + confirm fields, auto-login on success)
-- **Edge TTS** — Microsoft AndrewNeural voice (Priority 1, replaces gTTS)
-- **Pillow slide design system** — 6 structured marketing templates (Priority 2):
-  - Hero, Problem, Solution, Features (checkmarks), How It Works, CTA
-  - Brand color gradients, typography hierarchy, decorative shapes
-- **Crossfade transitions** — FFmpeg xfade filter between slides, 0.5s fade (Priority 3)
-- **Watermark** — diagonal "SwiftPack AI" stamps burned into slide content area, 30% opacity, RGBA compositing (Priority 4)
-- **Background music bed** — FFmpeg amix filter, royalty-free .mp3 from `assets/music_beds/`, music ducked to -18 dB (Priority 4.5):
-  - Starter/Pro/Agency tiers get music bed under voiceover
-  - Free tier gets raw TTS only
-  - Drop any .mp3 into `backend/assets/music_beds/` to activate; folder empty = silently skipped
-- **Stripe subscription tiers** — Free/Starter/Pro/Agency with usage enforcement (Priority 5):
-  - Free: 3 lifetime videos, watermarked, 9:16 only
-  - Starter $19/mo: 15 videos, no watermark, all formats + music bed
-  - Pro $49/mo: 50 videos, talking head, priority queue + music bed
-  - Agency $149/mo: 200 videos, team seats, white label + music bed
-- **Modal + LTX-Video** — serverless A100 GPU for Pro/Agency tier (Priority 6):
-  - `backend/modal_video.py` deploys `swiftpack-ltx-video` app
-  - Free tier falls back to FFmpeg slideshow automatically
-- **SadTalker talking head** — portrait photo → lip-synced video (Priority 7):
-  - `backend/modal_sadtalker.py` deploys `swiftpack-sadtalker` on A10G GPU
-  - 5-layer protection: tier gate, Stripe Identity, DeepFace, consent, "AI GENERATED" label
-  - All endpoints live: `/api/talking-head/consent`, `/api/talking-head/verify-identity`, `/api/talking-head/generate`
-- Docker Compose deployment on VPS (swiftpackai.tech)
-- SSL via Let's Encrypt + Nginx reverse proxy
-- Rate limiting (in-process per-route limits)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Magic Button pipeline | ✅ Live | URL → scrape → scripts → videos → posters |
+| Logo Creator | ✅ Live | 6 Pillow templates + Ideogram AI concepts |
+| Edge TTS voiceover | ✅ Live | Microsoft AndrewNeural, free, no API key |
+| 6-slide design system | ✅ Live | Hero, Problem, Solution, Features, HowItWorks, CTA |
+| Crossfade transitions | ✅ Live | FFmpeg xfade, 0.5s fade |
+| Background music bed | ✅ Live | Drop .mp3 into `backend/assets/music_beds/` |
+| Watermark | ✅ Live | Diagonal stamps burned into slide content, 30% opacity |
+| Stripe subscriptions | ✅ Code done | Needs STRIPE_SECRET_KEY + price IDs in secrets |
+| Modal LTX-Video | ✅ Code done | Needs MODAL_TOKEN_ID + `modal deploy backend/modal_video.py` |
+| SadTalker talking head | ✅ Code done | Needs Modal deploy + Stripe Identity activation |
+| Open registration | ✅ Live | Auto-login, password + confirm fields |
 
-**Pending activation (code ready, needs env vars):**
-- Modal GPU (needs `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` in secrets file)
-- Stripe billing (needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs)
-- SadTalker (needs Modal deployed: `modal deploy backend/modal_sadtalker.py`)
-- Music bed (needs royalty-free .mp3 files dropped into `backend/assets/music_beds/`)
+### ✅ Legal Documents Feature (June 2026 — new)
+
+| Feature | Status |
+|---------|--------|
+| 28 document types, 5 categories | ✅ Live |
+| Gemini-powered intake chat | ✅ Live |
+| Live DuckDuckGo legal context search | ✅ Live |
+| GDPR / PIPEDA+Law25 / CCPA jurisdiction support | ✅ Live |
+| Credit system (monthly + topup) | ✅ Live |
+| Business profile management (plan-limited) | ✅ Live |
+| Regeneration at 10% discount | ✅ Live |
+| Stripe one-time topup checkout | ✅ Live |
+| Document vault with download/copy | ✅ Live |
+| 90-day laws-changed nudge | ✅ Live |
 
 ---
 
 ## Tech Stack
 
 ```
-Backend:    FastAPI (Python 3.11) — server.py is entire backend
-Frontend:   React 19 + Tailwind CSS 3.4 + React Router DOM 7.5.1
-Database:   MongoDB (Motor async driver) — resilient, works without it
+Backend:    FastAPI (Python 3.11) — server.py (~2900 lines) + legal_router.py + jarvis_router.py
+Frontend:   React 19 + Tailwind CSS 3.4 + Shadcn/UI + Framer Motion + React Router DOM 7.5.1
+Database:   MongoDB (Motor async driver)
 AI/LLM:     Google Gemini 2.5 Flash (google-genai SDK)
-TTS:        Edge TTS — Microsoft AndrewNeural voice (free, no API key)
+TTS:        Edge TTS — Microsoft AndrewNeural (free, no API key)
 Video:      FFmpeg + Pillow (CPU) → Modal A100/A10G GPU for Pro tier
-Scraping:   BeautifulSoup4 + httpx (verify=False for SSL)
+Legal ctx:  DuckDuckGo HTML scraping (no API key, latest law context per doc)
 Auth:       JWT (jose) + bcrypt + beta agreement modal
-Payments:   Stripe subscriptions + Stripe Identity (code complete, needs activation)
+Payments:   Stripe — subscriptions + one-time credit topups (legal)
 GPU:        Modal.com — LTX-Video (A100-40GB), SadTalker (A10G)
 Ports:      Backend 8001, Frontend 3000
-Proxy:      Nginx (SSL termination + reverse proxy)
-Deploy:     Docker Compose (4 containers: mongo, backend, frontend, nginx)
-Server:     Contabo VPS (root@YOUR_SERVER_IP)
-Repo path:  /root/swiftpack
-SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads or E:\secrets\)
+Proxy:      Nginx (SSL + reverse proxy, Let's Encrypt)
+Deploy:     Docker Compose (mongo + backend + frontend + nginx)
+Server:     Contabo VPS as root, /root/swiftpack
+SSH key:    novajaytechserver_testing-key.pem
 ```
 
 ---
@@ -86,14 +80,34 @@ SSH key:    novajaytechserver_testing-key.pem (in ~/Downloads or E:\secrets\)
 ```
 POST /api/magic-button
   1. scrape_url()             → brand colors, headline, features, images[]
-  2. generate_script(PAS)     → ad script via Gemini
-  3. generate_script(Step)    → tutorial script via Gemini
+  2. generate_script(PAS)     → ad script (Gemini)
+  3. generate_script(Step)    → tutorial script (Gemini)
   4. create_complete_video()  → 9:16 ad video
-     ├── Free tier:   Pillow 6-slide design system + xfade + Edge TTS + watermark
-     └── Pro/Agency:  Modal LTX-Video AI clip → FFmpeg loop + captions (fallback: slideshow)
-  5. create_complete_video()  → 16:9 tutorial video (same pipeline)
+     ├── Free/Starter: Pillow 6-slide + xfade + Edge TTS + watermark + music
+     └── Pro/Agency:   Modal LTX-Video AI → FFmpeg captions (fallback: slideshow)
+  5. create_complete_video()  → 16:9 tutorial video
   6. create_poster()          → 1:1 social poster
   7. create_poster()          → 9:16 social poster
+```
+
+---
+
+## Legal Documents Pipeline
+
+```
+POST /api/legal/chat/{profile_id}         ← Gemini intake chat
+  - Detects [PROFILE_COMPLETE] → saves intake_data JSON to profile
+
+POST /api/legal/generate
+  For each selected doc_id:
+  1. DuckDuckGo search: "[doc_name] [jurisdiction] requirements 2026"
+  2. Gemini generation: search context + intake_data + doc template
+  3. Append legal disclaimer (date + jurisdiction + lawyer review warning)
+  4. Store in legal_documents collection
+  5. Deduct credits (monthly first, then topup)
+
+POST /api/legal/regenerate/{id}
+  - Same as generate, 10% fewer credits than original
 ```
 
 ---
@@ -101,22 +115,47 @@ POST /api/magic-button
 ## Key Files
 
 ```
-backend/server.py              Main FastAPI backend (entire app — ~2700 lines)
-backend/modal_video.py         Modal LTX-Video serverless GPU app (Priority 6)
-backend/modal_sadtalker.py     Modal SadTalker talking head GPU app (Priority 7)
-backend/requirements.txt       Python dependencies (includes modal>=0.64.0)
-backend/.env                   Local env vars (gitignored)
+backend/server.py              Main FastAPI backend — auth, video, posters, Stripe, Magic Button
+backend/legal_router.py        Legal documents — profiles, chat, catalog, generate, topup
+backend/jarvis_router.py       JARVIS business intelligence (GET /api/jarvis/pulse)
+backend/modal_video.py         Modal LTX-Video serverless GPU app
+backend/modal_sadtalker.py     Modal SadTalker talking head GPU app
+backend/requirements.txt       Python dependencies
+
 frontend/src/App.js            React routing + auth gate
 frontend/src/components/
-  Dashboard.js                 Magic Button UI + progress bar
-  auth/Login.js                Login page
-  auth/Register.js             Open public registration (password + confirm, auto-login)
-  auth/BetaAgreementModal.js   Beta agreement gate
-  Layout.js                    Nav wrapper
-docker-compose.yml             Production Docker Compose
-nginx.prod.conf                Nginx SSL + proxy config
-docs/PRODUCT_STRATEGY.md       Business model, pricing, roadmap
+  Landing.js                   Marketing landing page (two pillars: marketing + legal)
+  Dashboard.js                 Magic Button UI + progress
+  LegalDocs.js                 Legal documents — disclaimer gate + view router
+  legal/ProfileManager.js      Business profile CRUD with plan limits
+  legal/ChatIntake.js          Gemini intake chat UI with typing indicators
+  legal/DocumentCatalog.js     Category grid + checkboxes + sticky credit panel
+  legal/DocumentVault.js       Document list + markdown viewer + regen button
+  legal/TopupModal.js          Stripe credit topup — 3 packages
+  LogoCreator.js               Logo generator UI
+  Layout.js                    Nav with Legal link added
+
 docs/PROJECT_SUMMARY.md        This file
+docs/PRODUCT_STRATEGY.md       Business model, pricing strategy, roadmap
+docs/VIDEO_FEATURES.md         Video pipeline detail
+```
+
+---
+
+## MongoDB Collections
+
+```
+users                  Accounts + tier + legal_credits_topup field
+usage                  Monthly video/script/poster counters
+legal_profiles         Business profiles (user_id, intake_data, intake_complete)
+legal_chat             Chat messages per profile (role: user|assistant)
+legal_documents        Generated docs (content, credits_cost, jurisdiction, generated_at)
+legal_credits_usage    Monthly legal credit counters (user_id + year_month)
+logos                  Saved logo URLs
+beta_agreements        Beta acceptance log (user_id + ip + ua + timestamp)
+beta_users             Beta waitlist
+payment_transactions   Stripe session records (subscriptions + legal topups)
+talking_head_consents  Talking head consent records (photo_hash + timestamp)
 ```
 
 ---
@@ -125,117 +164,108 @@ docs/PROJECT_SUMMARY.md        This file
 
 ```env
 # /root/secrets/swiftpack.env (production)
-# E:/secrets/swiftpack.env (local Windows dev)
 
-MONGO_URL=mongodb://mongo:27017
-DB_NAME=swiftpackai_db
-CORS_ORIGINS=https://swiftpackai.tech,https://www.swiftpackai.tech
-BACKEND_URL=https://swiftpackai.tech
-FRONTEND_URL=https://swiftpackai.tech
+MONGODB_URL=mongodb://mongo:27017
+DB_NAME=launchbusinessai_db
+CORS_ORIGINS=https://launchbusinessai.com
+FRONTEND_URL=https://launchbusinessai.com
 GEMINI_API_KEY=...
-JWT_SECRET=...
-ADMIN_SECRET=...
+JWT_SECRET=...                          # min 32 chars
+ADMIN_SECRET=...                        # JARVIS auth
 
-# Stripe (activate when ready)
-STRIPE_SECRET_KEY=...
-STRIPE_WEBHOOK_SECRET=...
-STRIPE_STARTER_PRICE_ID=...
-STRIPE_PRO_PRICE_ID=...
-STRIPE_AGENCY_PRICE_ID=...
+# Stripe (subscriptions + legal topups)
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_STARTER_PRICE_ID=price_...
+STRIPE_PRO_PRICE_ID=price_...
+STRIPE_AGENCY_PRICE_ID=price_...
 
-# Modal GPU (activate when ready)
+# Modal GPU (Pro/Agency)
 MODAL_TOKEN_ID=...
 MODAL_TOKEN_SECRET=...
-MODAL_APP_NAME=swiftpack-ltx-video          # default
-MODAL_SADTALKER_APP=swiftpack-sadtalker     # default
+MODAL_APP_NAME=launchbusiness-ltx-video
+MODAL_SADTALKER_APP=launchbusiness-sadtalker
+
+# Optional
+BREVO_API_KEY=...
+HELICONE_API_KEY=...
+OPENROUTER_API_KEY=...
+ENVIRONMENT=production
 ```
+
+---
+
+## Plans & Legal Credits
+
+| Plan | Price | Videos/mo | Legal Credits/mo | Max Profiles |
+|------|-------|-----------|-----------------|--------------|
+| Free | $0 | 3 lifetime | 0 (catalog view only) | 0 |
+| Starter | $19/mo | 15 | 20 | 1 |
+| Pro | $49/mo | 50 | 60 | 3 |
+| Agency | $149/mo | 200 | 150 | Unlimited |
+
+**Topup packages:** 15cr/$5 · 35cr/$10 (best value) · 80cr/$20
+
+**Legal credit costs per document:** 1–5 credits (Privacy Policies, NDAs: 2–4cr · Business Plans, Shareholder Agreements: 4–5cr)
 
 ---
 
 ## Deploy Commands
 
 ```bash
-# SSH into server
+# SSH
 ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@YOUR_SERVER_IP
 
-# Pull + rebuild backend
-cd /root/swiftpack
-git pull
-docker compose build backend
-docker compose up -d backend
+# Rebuild backend (after legal_router.py or server.py changes)
+cd /root/swiftpack && git pull
+docker compose build backend && docker compose up -d backend
+docker restart swiftpack-nginx-1    # ← always restart nginx after backend
 
-# After backend container restart, nginx may lose upstream — restart it
-docker restart swiftpack-nginx-1
+# Rebuild frontend (after any .js component changes)
+docker compose build frontend && docker compose up -d frontend
 
-# Pull + rebuild frontend
-docker compose build frontend
-docker compose up -d frontend
-
-# Check logs
+# Logs
 docker logs swiftpack-backend-1 --tail=50
 docker logs swiftpack-frontend-1 --tail=20
 
 # Deploy Modal apps (run once, re-run after changes)
 modal deploy backend/modal_video.py
 modal deploy backend/modal_sadtalker.py
+
+# Auto-deploy cron (runs on server every 5 min)
+tail -f /root/logs/swiftpack-deploy.log
 ```
 
 ---
 
-## Create User (Admin)
+## Activating Pending Features
 
-```bash
-curl -X POST https://swiftpackai.tech/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"TempPass123!","name":"User Name"}'
-```
-
----
-
-## Cost Breakdown
-
-```
-Current monthly infra (no GPU active):
-  VPS (Contabo VPS):  ~$10-20/month
-  MongoDB:         $0 (self-hosted in Docker)
-  Gemini API:      $0 (within free tier for current volume)
-  Edge TTS:        $0 (Microsoft free, no API key)
-  Total:           ~$10-20/month
-
-With Modal GPU active (Pro/Agency tier):
-  VPS:             ~$20/month
-  LTX-Video:       ~$0.44/generation on A100 (pay per second, $0 idle)
-  SadTalker:       ~$0.10/generation on A10G
-  At 500 pro gens: ~$270 GPU + $20 VPS = $290/month
-  Pro revenue (50 users × $49): $2,450/month → very profitable
-```
+| Feature | What to do |
+|---------|-----------|
+| Stripe billing | Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET + price IDs in secrets |
+| Legal topups | Stripe already handles it via existing webhook — just needs STRIPE_SECRET_KEY |
+| Modal LTX-Video | Set MODAL_TOKEN_ID + MODAL_TOKEN_SECRET, run `modal deploy backend/modal_video.py` |
+| SadTalker | Set Modal tokens, run `modal deploy backend/modal_sadtalker.py`, activate Stripe Identity |
+| Music bed | Drop royalty-free .mp3 into `backend/assets/music_beds/` (Pixabay / ccMixter) |
 
 ---
 
-## What's Next (Priority Order)
-
-See `docs/PRODUCT_STRATEGY.md` for full strategy.
-
-1. ~~Edge TTS~~ ✅ Done
-2. ~~Pillow slide design system~~ ✅ Done
-3. ~~Crossfade transitions~~ ✅ Done
-4. ~~Watermark in slide design~~ ✅ Done
-4.5. ~~Background music bed~~ ✅ Done (needs royalty-free .mp3 files in `backend/assets/music_beds/`)
-5. ~~Stripe subscription enforcement~~ ✅ Done (needs activation)
-6. ~~Modal + LTX-Video~~ ✅ Done (needs Modal token)
-7. ~~SadTalker talking head~~ ✅ Done (needs Modal deploy)
-8. ~~Open public registration~~ ✅ Done
-9. **AppSumo LTD launch** — next priority after activating Stripe + Modal
-
----
-
-## Known Issues / Decisions
+## Known Issues / Notes
 
 - After backend container restart, nginx loses upstream — always `docker restart swiftpack-nginx-1`
 - MongoDB writes silently skipped if unavailable (content still generates)
 - httpx uses verify=False for scraping (SSL cert issues on some sites)
-- GTX 1080 Ti is reserved for Mother AI — NEVER route SwiftPack traffic to it
-- Playwright/Chromium too heavy for VPS Contabo VPS — don't install on server
-- Modal GPU not active until `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` set in secrets file
-- Stripe billing not active until price IDs and keys added to secrets file
-- Music beds folder `backend/assets/music_beds/` is empty by default — drop royalty-free `.mp3` files to activate; Pixabay, Free Music Archive, or ccMixter are good sources
+- GTX 1080 Ti is reserved for Mother AI — never route SwiftPack traffic to it
+- Playwright/Chromium too heavy for Contabo VPS (1GB RAM limit) — do not install
+- Legal documents require lawyer review — all docs include prominent disclaimer
+- DuckDuckGo search in legal_router may be rate-limited under heavy load (add backoff if needed)
+
+---
+
+## What's Next
+
+1. **Activate Stripe** — set price IDs + keys → billing goes live
+2. **AppSumo LTD launch** — after Stripe active, product must look polished
+3. **More legal jurisdictions** — Australia (Privacy Act), UK (UK GDPR), India (PDPB)
+4. **Lawyer marketplace (V2)** — connect users with vetted lawyers for document review
+5. **Modal GPU activation** — after first paying users, activate LTX-Video for Pro tier

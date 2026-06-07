@@ -1,17 +1,30 @@
-﻿# SwiftPack AI
+# LaunchBusiness AI
 
-> Transform any website URL into a complete marketing launch pack in 30 seconds — videos, scripts, and posters, all AI-powered and completely free to run.
+> **Marketing pack in 90 seconds. Legal documents in minutes. Everything a founder needs to launch.**
+
+Live at **[launchbusinessai.com](https://launchbusinessai.com)** — built by [NovaJay Tech](https://novajaytech.com)
 
 ---
 
 ## What It Does
 
-Paste a URL. Click one button. Get:
-- **2 Videos** — Ad (9:16 vertical) + Tutorial (16:9 landscape), with AI voiceover, animated captions, and dynamic zoom effects
-- **2 Scripts** — PAS framework ad copy + Step-by-Step tutorial script
-- **2 Posters** — Branded social graphics (1:1 square + 9:16 vertical)
+LaunchBusiness AI is a two-pillar platform for founders:
 
-Built for non-technical founders who need professional marketing content without hiring designers, copywriters, or video editors.
+### 🚀 Pillar 1 — Marketing Launch Pack
+Paste your product URL. Get a complete marketing pack in 90 seconds:
+- **Logo** — 6 AI-powered templates + Ideogram AI concepts
+- **2 Videos** — Ad (9:16) + Tutorial (16:9) with neural voiceover, animated captions, crossfade transitions
+- **2 Scripts** — PAS framework + Step-by-Step tutorial via Gemini 2.5 Flash
+- **2 Posters** — Brand-matched social graphics (1:1 + 9:16)
+
+### ⚖️ Pillar 2 — Legal Documents
+AI-powered legal document generation with 2026 law context:
+- **Adaptive intake chat** — Gemini-powered conversation gathers your business profile
+- **28 document types** — Privacy Policy, NDA, Employment Contract, Shareholder Agreement, and more
+- **Live web search** — fetches latest GDPR, PIPEDA, CCPA requirements before each generation
+- **Jurisdiction-aware** — Canada, USA, EU supported
+- **Credit-based** — monthly credits per plan + topup via Stripe
+- **Regeneration discount** — 10% fewer credits when regenerating (laws change)
 
 ---
 
@@ -19,25 +32,42 @@ Built for non-technical founders who need professional marketing content without
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | FastAPI 0.110.1, Python 3.11, Uvicorn |
-| **Frontend** | React 19, Tailwind CSS 3.4, Shadcn/UI |
+| **Backend** | FastAPI (Python 3.11) — `server.py` + `legal_router.py` + `jarvis_router.py` |
+| **Frontend** | React 19, Tailwind CSS 3.4, Shadcn/UI, Framer Motion |
 | **Database** | MongoDB (Motor async driver) |
-| **AI / LLM** | Google Gemini 2.5 Flash |
-| **TTS** | Google Cloud Text-to-Speech (Neural2) |
-| **Video** | MoviePy 2.2.1, FFmpeg, Pillow |
-| **Scraping** | BeautifulSoup4, Requests |
-| **Infrastructure** | Docker, Supervisor, Nginx |
+| **AI / LLM** | Google Gemini 2.5 Flash (`google-genai` SDK) |
+| **TTS** | Microsoft Edge TTS — AndrewNeural (free, no API key) |
+| **Video** | FFmpeg + Pillow (CPU) → Modal A100 GPU for Pro tier |
+| **GPU** | Modal.com — LTX-Video (A100-40GB), SadTalker (A10G) |
+| **Payments** | Stripe — subscriptions + one-time credit topups |
+| **Legal Search** | DuckDuckGo HTML (no API key, fetches latest law context) |
+| **Proxy** | Nginx (SSL + reverse proxy) |
+| **Deploy** | Docker Compose (4 containers: mongo, backend, frontend, nginx) |
 
 ---
 
 ## Features
 
-- **URL Intelligence** — Auto-extracts brand colors, headlines, and features from any website
-- **AI Script Generation** — 3 frameworks: PAS (Problem-Agitate-Solution), Step-by-Step, Before/After
-- **Video Automation** — Zoom/pan effects, UGC-style captions, progress bars, multi-format export
-- **Poster Generation** — Branded graphics with custom colors and typography
-- **Asset Manager** — Upload and reuse images, videos, and documents
-- **Dark Theme UI** — Cybernetic studio design with Indigo/Violet gradients
+### Marketing
+- **URL Intelligence** — auto-extracts brand colors, headlines, features from any site
+- **Logo Creator** — 6 Pillow templates + Ideogram AI concepts; 1024×1024 PNG output
+- **Video Pipeline** — 6-slide design system, xfade transitions, Edge TTS, music bed, captions
+- **AI Videos (Pro)** — LTX-Video on Modal A100 serverless GPU
+- **Talking Head (Pro)** — SadTalker lip-sync; Stripe Identity verification + DeepFace gate
+- **Script Generator** — PAS, Step-by-Step, Before/After frameworks
+- **Poster Generator** — brand-matched social graphics
+
+### Legal Documents
+- **28 document types** across 5 categories:
+  - *Privacy & Compliance*: Privacy Policy (GDPR/PIPEDA/CCPA), DPA, Cookie Policy, ROPA, Breach Plan, PIA
+  - *Business Agreements*: NDA, Terms of Service, Service Agreement, Contractor Agreement, IP Assignment
+  - *Corporate & Equity*: Founder Agreement, Shareholder Agreement, Vesting Schedule, Operating Agreement
+  - *Finance & Operations*: Invoice Template, SOW, Business Plan, Equity Agreement
+  - *HR & Employment*: Employment Contract, Offer Letter, Employee Handbook
+- **Intake chat** — Gemini conversation, detects completion, saves structured business profile
+- **Credit system** — monthly allowance (plan-based) + permanent topup wallet
+- **Profile limits** — Starter: 1 profile · Pro: 3 profiles · Agency: unlimited
+- **Document vault** — history, copy, download, 90-day laws-changed nudge
 
 ---
 
@@ -46,26 +76,40 @@ Built for non-technical founders who need professional marketing content without
 ```
 jobhuntpro_marketing/
 ├── backend/
-│   ├── server.py              # FastAPI application (all API routes)
+│   ├── server.py              # FastAPI backend (~2900 lines) — all core routes
+│   ├── legal_router.py        # Legal documents feature — profiles, chat, generate
+│   ├── jarvis_router.py       # JARVIS business intelligence endpoint
+│   ├── modal_video.py         # Modal LTX-Video serverless GPU app
+│   ├── modal_sadtalker.py     # Modal SadTalker talking head GPU app
 │   ├── requirements.txt       # Python dependencies
-│   ├── uploads/               # User-uploaded assets
-│   └── outputs/               # Generated videos & posters
+│   ├── outputs/               # Generated videos & posters
+│   └── assets/music_beds/     # Drop .mp3 files here to activate music bed
 │
-├── frontend/
-│   └── src/
-│       ├── App.js             # Main React app + routing
-│       └── components/
-│           ├── Dashboard.js       # Home screen with Magic Button
-│           ├── ScriptGenerator.js # AI script creation
-│           ├── CreateContent.js   # Video & poster creator
-│           ├── AssetUpload.js     # File upload manager
-│           ├── Gallery.js         # Content gallery & downloads
-│           └── Layout.js          # Navigation wrapper
+├── frontend/src/
+│   ├── App.js                 # React routing + auth gate
+│   └── components/
+│       ├── Landing.js             # Marketing landing page
+│       ├── Dashboard.js           # Magic Button UI
+│       ├── LegalDocs.js           # Legal documents main page
+│       ├── legal/
+│       │   ├── ProfileManager.js  # Business profile CRUD
+│       │   ├── ChatIntake.js      # AI intake chat UI
+│       │   ├── DocumentCatalog.js # Document picker with credits
+│       │   ├── DocumentVault.js   # Generated doc viewer
+│       │   └── TopupModal.js      # Stripe credit topup
+│       ├── LogoCreator.js         # Logo generator UI
+│       ├── ScriptGenerator.js     # Script creation
+│       ├── CreateContent.js       # Video & poster creator
+│       ├── Gallery.js             # Content gallery
+│       └── Layout.js              # Nav wrapper
 │
-├── PROJECT_SUMMARY.md         # Detailed project overview
-├── SETUP_INSTRUCTIONS.md      # Full setup guide
-├── TTS_SETUP.md               # Google Cloud TTS setup
-└── VIDEO_FEATURES.md          # Video automation documentation
+├── docs/
+│   ├── PROJECT_SUMMARY.md     # Full project state + deploy reference
+│   ├── PRODUCT_STRATEGY.md    # Business model + roadmap
+│   └── VIDEO_FEATURES.md      # Video pipeline documentation
+│
+├── docker-compose.yml         # Production Docker Compose
+└── README.md                  # This file
 ```
 
 ---
@@ -73,204 +117,171 @@ jobhuntpro_marketing/
 ## Quick Start
 
 ### Prerequisites
+- Python 3.11+, Node.js 18+, MongoDB 6+, FFmpeg
 
-- Python 3.11+
-- Node.js 18+
-- MongoDB 5.0+
-- FFmpeg
-
-### 1. Clone & Configure Backend
+### Backend
 
 ```bash
-git clone https://github.com/jay6294100293/jobhuntpros_marketing.git
-cd jobhuntpros_marketing/backend
-
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+cd backend
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create `backend/.env`:
+`backend/.env`:
 ```env
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=jobhuntpro_db
+MONGODB_URL=mongodb://localhost:27017
+DB_NAME=launchbusinessai_db
 CORS_ORIGINS=http://localhost:3000
-GEMINI_API_KEY=your-gemini-api-key-here
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcloud-tts-key.json
+GEMINI_API_KEY=your-gemini-key
+JWT_SECRET=your-secret-min-32-chars
+FRONTEND_URL=http://localhost:3000
 ```
 
-Start backend:
 ```bash
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-### 2. Configure Frontend
+### Frontend
 
 ```bash
-cd ../frontend
+cd frontend
 yarn install
-```
-
-Create `frontend/.env`:
-```env
-REACT_APP_BACKEND_URL=http://localhost:8001
-```
-
-Start frontend:
-```bash
+echo "REACT_APP_BACKEND_URL=http://localhost:8001" > .env
 yarn start
 ```
 
-### 3. Open App
-
-Navigate to `http://localhost:3000` — paste any URL and hit the Magic Button.
-
----
-
-## API Keys
-
-| Key | Required | Free Tier | Get It |
-|-----|----------|-----------|--------|
-| Google Gemini API | Yes | 1,000 req/day | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| Google Cloud TTS | Optional | 4M chars/month | [console.cloud.google.com](https://console.cloud.google.com) |
-
----
-
-## Cost
-
-**Zero for typical usage.** Both AI services have generous free tiers:
-
-- 50 videos/month = **$0.00** (within all free tiers)
-- After free tier: ~$0.002 per video
-
-Production hosting (AWS/GCP/DigitalOcean): $20–55/month depending on provider.
-
----
-
-## Local Development
-
-**Secrets** live outside the repo in `E:\secrets\swiftpack.env` (Windows) — copy `.env.example` to that path and fill in real values.
-
-The `docker-compose.yml` reads secrets from whatever path `ENV_FILE` is set to, defaulting to `./backend/.env` for simple local runs:
-
-```bash
-# Option A — use default fallback (backend/.env)
-docker-compose up -d
-
-# Option B — point at the external secrets file explicitly
-ENV_FILE=E:/secrets/swiftpack.env docker-compose up -d
-
-# Option C — run backend directly (no Docker)
-cd backend
-uvicorn server:app --host 0.0.0.0 --port 8001 --reload
-```
-
----
-
-## Deployment
-
-SwiftPack AI uses **pull-based deployment**.  
-Push to `main` → tests run → server auto-deploys within 5 minutes.  
-No GitHub Secrets needed.
-
-View logs on server:
-```bash
-tail -f /root/logs/swiftpack-deploy.log
-```
-
-### How it works
-
-1. GitHub Actions runs `pytest` (skips gracefully if no test files exist) — no SSH, no secrets
-2. The server runs a cron job every 5 minutes that calls `auto-deploy-swiftpack.sh`
-3. The script does `git fetch` and compares local vs remote HEAD
-4. If a new commit exists it pulls, rebuilds containers, and logs the deploy
-5. If already up-to-date it exits silently (zero overhead)
-
-### Fresh server setup
-
-Run once on a new Contabo VPS to configure the auto-deploy cron:
-
-```bash
-# Clone repo
-git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /root/swiftpack
-
-# Run cron setup script (copies auto-deploy.sh and installs crontab entry)
-bash /root/swiftpack/scripts/setup-cron.sh
-
-# Add secrets
-nano /root/secrets/swiftpack.env
-```
-
-### SSL certificate
-
-```bash
-certbot certonly --standalone -d swiftpackai.tech -d www.swiftpackai.tech
-```
-
-### Manual deploy (emergency)
-
-```bash
-ssh -i ~/path/to/key.pem root@YOUR_SERVER_IP \
-  "cd /root/swiftpack && git pull && docker compose up -d --build"
-```
+Open `http://localhost:3000`
 
 ---
 
 ## API Reference
 
-```bash
-# Health check
-GET /api/
+### Marketing
+```
+POST /api/magic-launch-pack     URL → 2 videos + 2 scripts + 2 posters (all-in-one)
+POST /api/scrape                URL → brand data
+POST /api/generate-script       AI script generation
+POST /api/create-complete-video Full video with TTS + captions
+POST /api/create-poster         Branded social graphic
+POST /api/logos/generate        Logo templates + AI concepts
+```
 
-# Scrape website
-POST /api/scrape
-Body: { "url": "https://example.com" }
+### Legal Documents
+```
+POST   /api/legal/profiles              Create business profile
+GET    /api/legal/profiles              List user's profiles
+DELETE /api/legal/profiles/{id}         Delete profile
+POST   /api/legal/chat/{profile_id}/start  Start intake chat
+POST   /api/legal/chat/{profile_id}     Send chat message
+GET    /api/legal/catalog               All document types + credit costs
+POST   /api/legal/generate              Generate selected documents
+GET    /api/legal/history/{profile_id}  Generated document history
+GET    /api/legal/document/{id}         Single document content
+POST   /api/legal/regenerate/{id}       Regenerate at 10% credit discount
+GET    /api/legal/credits               Credit balance
+GET    /api/legal/topup/packages        Available topup packages
+POST   /api/legal/topup/checkout        Stripe one-time payment session
+```
 
-# Generate script
-POST /api/generate-script
-Body: { "framework": "PAS", "product_name": "...", "target_audience": "...", "key_features": [...] }
-
-# Create video
-POST /api/create-video
-Body: { "script": "...", "format": "9:16", "brand_colors": [...] }
-
-# Create poster
-POST /api/create-poster
-Body: { "headline": "...", "subtext": "...", "brand_colors": [...] }
-
-# Magic Button (all-in-one)
-POST /api/magic-launch-pack
-Body: { "url": "https://yourproduct.com" }
+### Auth + Billing
+```
+POST /api/auth/register         Create account
+POST /api/auth/login            Sign in
+GET  /api/auth/me               User profile + usage + legal credits
+POST /api/billing/checkout/pro  Stripe subscription checkout
+POST /api/billing/webhook       Stripe webhook (subscriptions + legal topups)
+GET  /api/billing/portal        Stripe billing portal
 ```
 
 ---
 
-## System Requirements
+## Environment Variables
 
-| | Minimum | Recommended |
-|--|---------|-------------|
-| CPU | 2 cores | 4 cores |
-| RAM | 4 GB | 8 GB |
-| Storage | 10 GB | 50 GB SSD |
+```env
+# Required
+MONGODB_URL=mongodb://mongo:27017
+DB_NAME=launchbusinessai_db
+GEMINI_API_KEY=...
+JWT_SECRET=...                          # min 32 chars
+FRONTEND_URL=https://launchbusinessai.com
+CORS_ORIGINS=https://launchbusinessai.com
+
+# Stripe (subscriptions + legal topups)
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+STRIPE_STARTER_PRICE_ID=price_xxx
+STRIPE_PRO_PRICE_ID=price_xxx
+STRIPE_AGENCY_PRICE_ID=price_xxx
+
+# Modal GPU — Pro/Agency video + talking head
+MODAL_TOKEN_ID=...
+MODAL_TOKEN_SECRET=...
+
+# Optional
+BREVO_API_KEY=...                       # transactional email
+HELICONE_API_KEY=...                    # AI cost tracking
+OPENROUTER_API_KEY=...                  # Gemini fallback
+ADMIN_SECRET=...                        # JARVIS intelligence endpoint
+```
 
 ---
 
-## Troubleshooting
+## MongoDB Collections
 
-**MongoDB connection failed** — Start MongoDB: `mongod --dbpath /path/to/data`
+| Collection | Purpose |
+|-----------|---------|
+| `users` | Accounts, tiers, legal_credits_topup |
+| `usage` | Monthly video/script/poster counters |
+| `legal_profiles` | Business profiles for legal docs |
+| `legal_chat` | Intake chat history per profile |
+| `legal_documents` | Generated legal document content |
+| `legal_credits_usage` | Monthly legal credit counters |
+| `logos` | Saved logo records |
+| `beta_agreements` | Beta agreement acceptance log |
+| `payment_transactions` | Stripe session records |
 
-**FFmpeg not found** — Install via `apt-get install ffmpeg` (Linux) or `brew install ffmpeg` (macOS)
+---
 
-**CORS errors** — Set `CORS_ORIGINS=http://localhost:3000` in `backend/.env`
+## Deployment
 
-**Video creation fails / TextClip font error** — Install fonts: `apt-get install fonts-liberation`
+Pull-based auto-deploy — push to `main`, server picks it up within 5 minutes.
+
+```bash
+# SSH
+ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@YOUR_SERVER_IP
+
+# Rebuild + restart
+cd /root/swiftpack
+git pull
+docker compose build backend && docker compose up -d backend
+docker restart swiftpack-nginx-1   # always restart nginx after backend
+
+# Logs
+docker logs swiftpack-backend-1 --tail=50
+```
+
+### Fresh server setup
+```bash
+git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /root/swiftpack
+bash /root/swiftpack/scripts/setup-cron.sh
+nano /root/secrets/swiftpack.env
+```
+
+---
+
+## Plans & Legal Credits
+
+| Plan | Price | Videos | Legal Credits | Business Profiles |
+|------|-------|--------|---------------|-------------------|
+| Free | $0 | 3 lifetime | — (catalog visible) | 0 |
+| Starter | $19/mo | 15/mo | 20/mo | 1 |
+| Pro | $49/mo | 50/mo | 60/mo | 3 |
+| Agency | $149/mo | 200/mo | 150/mo | Unlimited |
+
+Credit topups: 15 credits/$5 · 35 credits/$10 · 80 credits/$20
 
 ---
 
 ## License
 
-MIT
-
----
-
-**Built for non-creative founders who need professional marketing content at scale.**
+MIT — built by NovaJay Tech
