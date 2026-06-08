@@ -5,8 +5,16 @@
 
 ## Product Vision
 
-URL → complete AI marketing launch pack in 90 seconds.
-The free tier shows our ceiling. Users judge quality once, then decide to pay.
+**Original:** URL → complete AI marketing launch pack in 90 seconds.
+
+**Expanded (June 2026):** Replace the human content creator, video editor, and lawyer — entirely.
+A user inputs a client's brand brief once. LaunchBusiness AI acts as their full launch team:
+logo designer + video editor + copywriter + social media manager + legal consultant.
+
+The three pillars (Marketing, Legal, Logo) must connect through a shared Brand Profile.
+Right now they are siloed — every tool asks for the same brand info separately.
+The Brand Profile is the architectural fix that unlocks the "content creator replacement" pitch.
+
 "Free = our best work, limited to 3 runs. Paid = unlimited."
 
 ---
@@ -37,13 +45,14 @@ Total: 7 assets per Magic Button click.
 - ~~Watermark burned into slide design~~ ✅ diagonal RGBA stamps, content area
 - ~~Background music bed~~ ✅ FFmpeg amix, royalty-free .mp3, ducked -18dB under voice (paid tiers only)
 
-### Pro tier target (GPU-powered via Modal.com) — REVISED June 2026
-- ~~LTX-Video~~ → REPLACED by SVD (Stable Video Diffusion) image-to-video
-  Reason: LTX generates generic footage. SVD animates actual product slides.
-  See docs/VIDEO_PIPELINE.md for full decision log.
-- Creative direction input (Phase 1 — script only, no GPU)
-- AI-animated slides on Pro (Phase 2 — SVD on Modal A100)
-- Talking head (Phase 3 — requires Modal + SadTalker deploy + ID verification)
+### Paid tier target (GPU-powered via Modal.com) — REVISED June 2026
+- ~~LTX-Video~~ → ~~SVD~~ → **REPLACED by Wan 2.2 TI2V-5B** (image+text to video)
+  Reason: Wan 2.2 takes our Hero slide as input image → animates real branded content. Also 14× cheaper than LTX-Video ($0.03 vs $0.44/clip). Fits A10G not A100.
+  Full decision: `docs/WAN_VIDEO_UPGRADE.md`
+- AI video available to ALL paid tiers (Starter/Pro/Agency) — not just Pro. At $0.03/clip, margin stays at ~98% even on Starter.
+- Tutorial Studio — Chrome extension for YouTube tutorial generation (Starter+ only)
+  Full spec: `docs/TUTORIAL_STUDIO.md`
+- Talking head (Pro/Agency — requires Modal + SadTalker deploy + ID verification)
 
 ---
 
@@ -121,18 +130,28 @@ DO NOT offer unlimited gens on LTD — always monthly cap.
 
 ---
 
-## Unit Economics (with Modal + LTX-Video + SadTalker)
+## Unit Economics (with Modal + Wan 2.2 + SadTalker)
 
-GPU cost per generation: ~$0.65
-(LTX-Video ~$0.44 + SadTalker ~$0.10 + Edge TTS $0 + overhead)
+**UPDATED June 2026** — Wan 2.2 replaces LTX-Video. GPU cost drops from ~$0.44 to ~$0.03/clip.
+
+GPU cost per generation: ~$0.038
+(Wan 2.2 ~$0.03 + Pexels $0 + Edge TTS $0 + Gemini ~$0.008)
 
 Real-world usage is ~50% of monthly allocation (users don't max out).
 
 | Plan | Revenue | Actual GPU Cost | Gross Margin |
 |------|---------|----------------|--------------|
-| Starter (15 gens, ~7 used) | $19 | $4.55 | ~76% |
-| Pro (50 gens, ~25 used) | $49 | $16.25 | ~67% |
-| Agency (200 gens, ~100 used) | $149 | $65 | ~56% |
+| Starter (15 gens, ~8 used) | $19 | $0.30 | **~98%** |
+| Pro (50 gens, ~25 used) | $49 | $0.95 | **~98%** |
+| Agency (200 gens, ~100 used) | $149 | $3.80 | **~97%** |
+
+**Previous with LTX-Video (A100 40GB) — for reference:**
+
+| Plan | Revenue | Old GPU Cost | Old Margin |
+|------|---------|-------------|-----------|
+| Starter (15 gens, ~8 used) | $19 | $3.52 | ~81% |
+| Pro (50 gens, ~25 used) | $49 | $11.00 | ~78% |
+| Agency (200 gens, ~100 used) | $149 | $44.00 | ~70% |
 
 ---
 
@@ -244,12 +263,17 @@ Permanent account ban on violation.
 4. ~~Upgrade prompts at generation limit~~ ✅ — HTTP 429 with upgrade message
 5. **To activate**: add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_*_PRICE_ID to secrets file
 
-### Phase 3 — Pro Tier GPU ✅ COMPLETE (pending activation)
-1. ~~Modal.com account + deployment~~ ✅ — backend/modal_video.py ready
-2. ~~LTX-Video endpoint on Modal (Apache 2.0)~~ ✅ — A100-40GB, ~$0.44/video
-3. ~~Route pro users to Modal for video backgrounds~~ ✅ — best-effort, falls back to slideshow
-4. ~~Keep FFmpeg slideshow for free tier~~ ✅ — MODAL_ENABLED flag gates all GPU calls
-5. **To activate**: add MODAL_TOKEN_ID + MODAL_TOKEN_SECRET, run `modal deploy backend/modal_video.py`
+### Phase 3 — GPU Video Engine — REVISED: Wan 2.2 replaces LTX-Video
+1. ~~Modal.com account + deployment~~ ✅ — infrastructure ready
+2. ~~LTX-Video~~ → **REPLACE with Wan 2.2 TI2V-5B** — rewrite `backend/modal_video.py`
+   - New GPU: A10G (not A100) — fits Wan 2.2 5B FP8 in 24GB, costs 3× less
+   - New APP_NAME: `launchbusiness-wan-video` (fixes silent mismatch bug)
+   - Adds image input: Hero Pillow slide as starting frame
+   - Cost: ~$0.03/clip vs $0.44 (14× cheaper)
+3. ~~Route pro users to Modal~~ → Route ALL PAID TIERS to Wan 2.2 (Starter/Pro/Agency)
+4. ~~Keep FFmpeg slideshow for free tier~~ ✅ — unchanged
+5. **To activate**: rewrite modal_video.py → `modal deploy backend/modal_video.py` → add `MODAL_APP_NAME=launchbusiness-wan-video` to secrets
+6. Full spec: `docs/WAN_VIDEO_UPGRADE.md`
 
 ### Phase 4 — Talking Head ✅ COMPLETE (pending Modal deploy)
 1. ~~Stripe Identity ID verification gate~~ ✅ — POST /api/talking-head/verify-identity, webhook sets identity_verified
@@ -265,12 +289,24 @@ Permanent account ban on violation.
 3. No GPU required — same FFmpeg video, better copy
 4. Build time: ~3 hours
 
-### Phase 6 — AI-Animated Slides on Pro (after Modal setup)
-1. Activate Modal: add MODAL_TOKEN_ID + MODAL_TOKEN_SECRET to secrets
-2. Replace SVD for Pro: Pillow slides → SVD image-to-video → animated clips
-3. Creative direction on Pro triggers SVD (+5 credits)
+### Phase 6 — Wan 2.2 GPU Video Upgrade (replaces LTX-Video / SVD plan)
+1. Rewrite `backend/modal_video.py` — swap LTX-Video for Wan 2.2 TI2V-5B on A10G
+2. Fix APP_NAME: `launchbusiness-wan-video` (eliminates existing silent failure bug)
+3. Add image input: pass Hero Pillow slide PNG to Wan 2.2 (animates real brand)
+4. Enable for ALL paid tiers (not just Pro) — margin is ~98% even on Starter at $0.03/clip
+5. Update `server.py` line 129: `MODAL_APP_NAME` default → `launchbusiness-wan-video`
+6. Deploy + activate: `modal deploy backend/modal_video.py`
+7. Full spec: `docs/WAN_VIDEO_UPGRADE.md` | Build time: ~5 hours
 
-### Phase 7 — Scale
+### Phase 7 — Tutorial Studio (Chrome Extension)
+1. Build Chrome extension: `extension/` folder (4 files — manifest, background, popup.html, popup.js)
+2. Extension uses Chrome's tabCapture API to record any tab the founder is on
+3. Server endpoint: `POST /api/tutorial/process` — extracts frames → Gemini Vision narrates → Edge TTS → FFmpeg assembles 16:9 tutorial
+4. Frontend component: `TutorialStudio.js` — extension download link + processing status
+5. Tier: Starter+ only. Counts as 1 video credit.
+6. Full spec: `docs/TUTORIAL_STUDIO.md` | Build time: ~10 hours
+
+### Phase 8 — Scale
 1. **AppSumo LTD launch** — activate Stripe + Modal first
 2. Agency white label — remove LaunchBusiness AI branding
 3. API access for agencies
@@ -296,4 +332,57 @@ Month 12: 400 Starter + 150 Pro + 40 Agency = $21,950/mo (~$264k ARR)
 | Runway | AI video | $35/mo | Full marketing pack, not just video |
 
 We combine HeyGen + Pictory + Runway in one Magic Button click.
+No competitor does Marketing + Legal + Logo in one platform. That's the moat.
 That's worth more. Start below market ($19-49), earn the right to raise.
+
+---
+
+## Phase 8 — Brand Profile + Content Creator Replacement (Next Major Feature)
+
+**Decision made June 2026.** Full spec in `docs/BRAND_PROFILE_FEATURE.md`.
+
+### The Problem
+All three tools (Video/Logo/Legal) are completely siloed. Users re-enter brand info three times.
+The logo never appears in videos. Legal chat doesn't know the business profile already entered elsewhere.
+
+### The Fix — Brand Profile
+One MongoDB document per client/brand that all three tools read from:
+- brand name, tagline, URL, colors (auto or manual), active logo PNG, audience, tone, jurisdiction, business type, revenue model
+
+### What Changes Per Tool
+- **Logo Creator**: auto-filled from profile, "Set as active logo" → logo flows into videos + posters
+- **Video Ads**: logo rendered on Hero + CTA slides, 3 hook variants generated, all formats in one job
+- **Legal Docs**: intake pre-filled from profile — reduces 8–10 chat exchanges to 2–3
+
+### New UX — 5-Step Wizard (replaces URL-paste)
+1. Brand Brief (name, tagline, URL, audience, tone, business type)
+2. Brand Identity (logo upload or Logo Creator, color picker or auto-extract)
+3. Script Selection (all 3 frameworks generated, user picks + edits before render)
+4. Format Selection (9:16 / 16:9 / 1:1 / 4:5, pick 3 hooks → up to 12 videos)
+5. Download Pack (all videos + posters + scripts, ZIP export)
+
+### New Feature — Full Launch Pack (one button)
+`POST /api/full-launch-pack` → logo + videos + posters + legal starter pack → ZIP
+
+### Agency Pitch After This Is Built
+Content creators / editors use Agency ($149/mo) to serve multiple clients.
+They replace their entire tool stack (video editor + copywriter + lawyer).
+Client pays them $500–$2,000/mo. They pay us $149. Pure arbitrage.
+
+### Build Priority (estimated effort)
+| Priority | Feature | Effort |
+|---|---|---|
+| 1 | Brand Profile model + UI | 6h |
+| 2 | Logo → slide/poster rendering | 5h |
+| 3 | Manual color picker | 4h |
+| 4 | 3 hook variants per run | 4h |
+| 5 | Script edit step before render | 3h |
+| 6 | 4:5 format (Facebook feed) | 2h |
+| 7 | Batch ZIP download | 3h |
+| 8 | Legal intake pre-fill from profile | 4h |
+| 9 | Full Launch Pack endpoint | 9h |
+**Total: ~40 hours / ~1 week**
+
+---
+
+## Competitors

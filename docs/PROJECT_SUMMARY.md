@@ -32,7 +32,7 @@ LaunchBusiness AI is a two-pillar platform for founders:
 | Background music bed | ✅ Live | Drop .mp3 into `backend/assets/music_beds/` |
 | Watermark | ✅ Live | Diagonal stamps burned into slide content, 30% opacity |
 | Stripe subscriptions | ✅ Code done | Needs STRIPE_SECRET_KEY + price IDs in secrets |
-| Modal LTX-Video | ✅ Code done | Needs MODAL_TOKEN_ID + `modal deploy backend/modal_video.py` |
+| Modal Wan 2.2 Video | 🔄 Rewrite needed | Replace LTX-Video with Wan 2.2 TI2V-5B in `modal_video.py`, then deploy |
 | SadTalker talking head | ✅ Code done | Needs Modal deploy + Stripe Identity activation |
 | Open registration | ✅ Live | Auto-login, password + confirm fields |
 
@@ -65,7 +65,7 @@ Video:      FFmpeg + Pillow (CPU) → Modal A100/A10G GPU for Pro tier
 Legal ctx:  DuckDuckGo HTML scraping (no API key, latest law context per doc)
 Auth:       JWT (jose) + bcrypt + beta agreement modal
 Payments:   Stripe — subscriptions + one-time credit topups (legal)
-GPU:        Modal.com — LTX-Video (A100-40GB), SadTalker (A10G)
+GPU:        Modal.com — Wan 2.2 TI2V-5B (A10G, replaces LTX-Video), SadTalker (A10G)
 Ports:      Backend 8001, Frontend 3000
 Proxy:      Nginx (SSL + reverse proxy, Let's Encrypt)
 Deploy:     Docker Compose (mongo + backend + frontend + nginx)
@@ -244,9 +244,11 @@ tail -f /root/logs/swiftpack-deploy.log
 |---------|-----------|
 | Stripe billing | Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET + price IDs in secrets |
 | Legal topups | Stripe already handles it via existing webhook — just needs STRIPE_SECRET_KEY |
-| Modal LTX-Video | Set MODAL_TOKEN_ID + MODAL_TOKEN_SECRET, run `modal deploy backend/modal_video.py` |
+| Modal Wan 2.2 Video | Rewrite `modal_video.py` (see WAN_VIDEO_UPGRADE.md) → `modal deploy backend/modal_video.py` → set `MODAL_APP_NAME=launchbusiness-wan-video` in secrets |
 | SadTalker | Set Modal tokens, run `modal deploy backend/modal_sadtalker.py`, activate Stripe Identity |
 | Music bed | Drop royalty-free .mp3 into `backend/assets/music_beds/` (Pixabay / ccMixter) |
+| Pexels B-roll | Set `PEXELS_API_KEY` in secrets (free key at pexels.com/api) |
+| Tutorial Studio | Build extension (`extension/` folder) + server endpoint + frontend component (see TUTORIAL_STUDIO.md) |
 
 ---
 
@@ -265,7 +267,14 @@ tail -f /root/logs/swiftpack-deploy.log
 ## What's Next
 
 1. **Activate Stripe** — set price IDs + keys → billing goes live
-2. **AppSumo LTD launch** — after Stripe active, product must look polished
-3. **More legal jurisdictions** — Australia (Privacy Act), UK (UK GDPR), India (PDPB)
-4. **Lawyer marketplace (V2)** — connect users with vetted lawyers for document review
-5. **Modal GPU activation** — after first paying users, activate LTX-Video for Pro tier
+2. **Wan 2.2 GPU Video Upgrade** — rewrite `backend/modal_video.py`, deploy to Modal
+   - Replaces LTX-Video (A100 $0.44) with Wan 2.2 TI2V-5B (A10G $0.03) — 14× cheaper
+   - Takes Hero Pillow slide as input → animates actual branded content
+   - Unlocks AI video for ALL paid tiers (not just Pro)
+   - Full decision: `docs/WAN_VIDEO_UPGRADE.md` | Est. ~5 hours
+3. **Tutorial Studio** — Chrome extension + server endpoint for YouTube tutorial generation
+   - Founder records their real product, gets polished tutorial back automatically
+   - Full spec: `docs/TUTORIAL_STUDIO.md` | Est. ~10 hours
+4. **AppSumo LTD launch** — after Stripe active + Wan 2.2 deployed
+5. **More legal jurisdictions** — Australia (Privacy Act), UK (UK GDPR), India (PDPB)
+6. **Lawyer marketplace (V2)** — connect users with vetted lawyers for document review

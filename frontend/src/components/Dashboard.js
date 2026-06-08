@@ -1,9 +1,10 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { BrandProfiles } from './BrandProfiles';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -26,6 +27,8 @@ export const Dashboard = () => {
   const [targetAudience, setTargetAudience] = useState('');
   const [creativeDirection, setCreativeDirection] = useState('');
   const [showCreative, setShowCreative] = useState(false);
+  const [showBrands, setShowBrands] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [usedCreative, setUsedCreative] = useState(false);
@@ -38,6 +41,16 @@ export const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canUseCreative = user?.tier && user.tier !== 'free';
+  const canUseBrands   = user?.tier && user.tier !== 'free';
+
+  const handleProfileSelect = (profile) => {
+    setSelectedProfile(profile);
+    setShowBrands(false);
+    if (!profile) return;
+    if (profile.brand_name) setProductName(profile.brand_name);
+    if (profile.url)        setUrl(profile.url);
+    if (profile.audience)   setTargetAudience(profile.audience);
+  };
   const hasFreeTrial = user && !user.free_pro_trial_used;
 
   const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
@@ -89,6 +102,7 @@ export const Dashboard = () => {
         product_name: productName,
         target_audience: targetAudience,
         ...(hasCreative ? { creative_direction: creativeDirection.trim() } : {}),
+        ...(selectedProfile ? { profile_id: selectedProfile.id } : {}),
       });
 
       setProgress(100);
@@ -136,6 +150,51 @@ export const Dashboard = () => {
 
         <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           <div className="space-y-6">
+
+            {/* Brand Profile selector — Starter+ only */}
+            {canUseBrands && (
+              <div>
+                <button
+                  onClick={() => setShowBrands(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-all"
+                  style={{
+                    background: selectedProfile ? 'rgba(99,102,241,0.08)' : 'rgba(39,39,42,0.5)',
+                    borderColor: selectedProfile ? 'rgba(99,102,241,0.4)' : 'rgba(63,63,70,1)',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-indigo-400" />
+                    <span className="text-sm font-medium text-zinc-300">
+                      {selectedProfile ? selectedProfile.brand_name : 'Use a brand profile (optional)'}
+                    </span>
+                    {selectedProfile && (
+                      <span className="text-xs text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full">
+                        Auto-filled
+                      </span>
+                    )}
+                  </div>
+                  <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${showBrands ? 'rotate-90' : ''}`} />
+                </button>
+                {showBrands && (
+                  <div className="mt-2 p-3 rounded-lg border border-zinc-800 bg-zinc-900/50">
+                    <BrandProfiles
+                      compact
+                      selectedId={selectedProfile?.id}
+                      onSelect={handleProfileSelect}
+                    />
+                    {selectedProfile && (
+                      <button
+                        onClick={() => handleProfileSelect(null)}
+                        className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-2">
                 <LinkIcon className="inline w-4 h-4 mr-2" />
@@ -312,102 +371,140 @@ export const Dashboard = () => {
         
         {results && (
           <div className="mt-8 space-y-6" data-testid="results-section">
-            <div className="text-center">
-              <h2 className="text-2xl font-heading font-semibold">Your Launch Pack is Ready! 🎉</h2>
-              <div className="flex items-center justify-center gap-2 flex-wrap mt-2">
-                {usedCreative && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                    <span>✦</span> Creative direction applied
-                  </span>
-                )}
-                {results?.pro_trial_used && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/10 border border-violet-500/20 text-violet-400">
-                    <span>✦</span> Pro quality used · <Link to="/pricing" className="underline hover:text-violet-300 transition-colors">Upgrade for more</Link>
-                  </span>
-                )}
+            {/* Header + ZIP download */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-heading font-semibold">Launch Pack Ready</h2>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  {usedCreative && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                      ✦ Creative direction applied
+                    </span>
+                  )}
+                  {selectedProfile && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                      <Briefcase className="w-3 h-3" /> {selectedProfile.brand_name}
+                    </span>
+                  )}
+                </div>
               </div>
+              {/* ZIP download all */}
+              {(() => {
+                const ids = [
+                  results.ad_video?.id,
+                  results.tutorial_video?.id,
+                  results.video_1_1?.id,
+                  results.video_4_5?.id,
+                  ...(results.posters || []).map(p => p.id),
+                ].filter(Boolean).join(',');
+                return ids ? (
+                  <a
+                    href={`${BACKEND_URL}/api/download-pack?ids=${ids}`}
+                    download="launchbusiness-pack.zip"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-white transition-all active:scale-95"
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+                  >
+                    <Zap className="w-4 h-4" /> Download All as ZIP
+                  </a>
+                ) : null;
+              })()}
             </div>
-            
-            {/* Videos Section */}
-            {(results.ad_video || results.tutorial_video) && (
+
+            {/* Videos — All 4 formats */}
+            {(results.ad_video || results.tutorial_video || results.video_1_1 || results.video_4_5) && (
               <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-indigo-400" />
-                  Complete Videos with Voiceover & Captions
+                  Videos — All Formats
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.ad_video && (
-                    <div className="bg-zinc-950/50 rounded-lg p-4">
-                      <p className="text-sm text-zinc-400 mb-2">Ad Video (9:16 - TikTok/Reels)</p>
-                      <p className="text-xs text-zinc-500 mb-3">
-                        ✓ Voiceover • ✓ Captions • ✓ Zoom Effects • ✓ Progress Bar
-                      </p>
-                      <a
-                        href={`${BACKEND_URL}${results.ad_video.url}`}
-                        download
-                        data-testid="download-ad-video"
-                        className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-md transition-all"
-                      >
-                        Download Ad Video
-                      </a>
-                    </div>
-                  )}
-                  {results.tutorial_video && (
-                    <div className="bg-zinc-950/50 rounded-lg p-4">
-                      <p className="text-sm text-zinc-400 mb-2">Tutorial Video (16:9 - YouTube)</p>
-                      <p className="text-xs text-zinc-500 mb-3">
-                        ✓ Voiceover • ✓ Captions • ✓ Zoom Effects • ✓ Progress Bar
-                      </p>
-                      <a
-                        href={`${BACKEND_URL}${results.tutorial_video.url}`}
-                        download
-                        data-testid="download-tutorial-video"
-                        className="inline-block bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-md transition-all"
-                      >
-                        Download Tutorial Video
-                      </a>
-                    </div>
-                  )}
+                <p className="text-xs text-zinc-500 mb-4">
+                  {results.ad_video?.engine === 'hybrid-pexels-ltx' && 'Pexels B-roll + LTX cinematic intro/outro + product overlay · '}
+                  {results.ad_video?.engine === 'pexels' && 'Pexels B-roll + product overlay · '}
+                  Poppins font · Word-chunk captions · Neural voiceover
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { video: results.ad_video,       fmt: '9:16',  label: 'TikTok / Reels',    color: 'bg-indigo-600 hover:bg-indigo-500',  testId: 'download-ad-video' },
+                    { video: results.tutorial_video, fmt: '16:9',  label: 'YouTube / LinkedIn', color: 'bg-violet-600 hover:bg-violet-500',  testId: 'download-tutorial-video' },
+                    { video: results.video_1_1,      fmt: '1:1',   label: 'Instagram / Twitter', color: 'bg-emerald-700 hover:bg-emerald-600', testId: 'download-11-video' },
+                    { video: results.video_4_5,      fmt: '4:5',   label: 'Facebook / IG Feed', color: 'bg-rose-700 hover:bg-rose-600',      testId: 'download-45-video' },
+                  ].map(({ video, fmt, label, color, testId }) => (
+                    video ? (
+                      <div key={fmt} className="bg-zinc-950/60 rounded-lg p-3 space-y-2 border border-zinc-800">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-zinc-300">{fmt}</span>
+                          <span className="text-xs text-zinc-600">{video.engine}</span>
+                        </div>
+                        <p className="text-xs text-zinc-500">{label}</p>
+                        <a href={`${BACKEND_URL}${video.url}`} download data-testid={testId}
+                           className={`inline-flex items-center gap-1.5 ${color} text-white text-xs font-medium px-3 py-1.5 rounded-md transition-all w-full justify-center`}>
+                          <Zap className="w-3 h-3" /> Download
+                        </a>
+                      </div>
+                    ) : (
+                      <div key={fmt} className="bg-zinc-950/30 rounded-lg p-3 border border-zinc-800/50 flex items-center justify-center">
+                        <p className="text-xs text-zinc-700">{fmt} generating…</p>
+                      </div>
+                    )
+                  ))}
                 </div>
               </div>
             )}
-            
-            {/* Scripts Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Hook variants — 3 scripts */}
+            {results.hook_variants?.length > 0 && (
               <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-indigo-400" />
-                  Ad Script (PAS)
+                  3 Script Variants
                 </h3>
-                <p className="text-sm text-zinc-400 whitespace-pre-wrap" data-testid="ad-script">{results.ad_script.content.substring(0, 200)}...</p>
-              </div>
-              
-              <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-violet-400" />
-                  Tutorial Script
-                </h3>
-                <p className="text-sm text-zinc-400 whitespace-pre-wrap" data-testid="tutorial-script">{results.tutorial_script.content.substring(0, 200)}...</p>
-              </div>
-            </div>
-            
-            {/* Posters Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {results.posters.map((poster, index) => (
-                <div key={poster.id} className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold mb-3">Poster {index + 1} ({poster.format})</h3>
-                  <a
-                    href={`${BACKEND_URL}${poster.url}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid={`download-poster-${index + 1}`}
-                    className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-md transition-all"
-                  >
-                    Download Poster
-                  </a>
+                <p className="text-xs text-zinc-500 mb-4">PAS · Step-by-Step · Before/After — pick the angle that fits your campaign</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {results.hook_variants.map((script, i) => {
+                    const labels = ['PAS — Pain / Agitate / Solve', 'Step-by-Step — Tutorial', 'Before / After — Transformation'];
+                    const colors = ['#818cf8', '#a78bfa', '#6ee7b7'];
+                    return (
+                      <div key={script.id || i} className="bg-zinc-950/50 rounded-lg p-4 space-y-3">
+                        <p className="text-xs font-semibold" style={{ color: colors[i] }}>{labels[i]}</p>
+                        <p className="text-xs text-zinc-500 leading-relaxed" data-testid={i === 0 ? 'ad-script' : i === 1 ? 'tutorial-script' : undefined}>
+                          {script.content?.substring(0, 160)}…
+                        </p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(script.content); toast.success('Script copied'); }}
+                          className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors border border-zinc-800 hover:border-zinc-600 px-3 py-1 rounded"
+                        >
+                          Copy full script
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* Posters */}
+            {results.posters?.length > 0 && (
+              <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-violet-400" />
+                  Social Posters
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {results.posters.map((poster, index) => (
+                    <div key={poster.id} className="bg-zinc-950/50 rounded-lg p-4 space-y-3">
+                      <p className="text-sm font-medium text-zinc-300">
+                        Poster {index + 1} <span className="text-zinc-600 font-normal">{poster.format}</span>
+                      </p>
+                      <a href={`${BACKEND_URL}${poster.url}`} target="_blank" rel="noopener noreferrer"
+                         data-testid={`download-poster-${index + 1}`}
+                         className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-md transition-all">
+                        <Zap className="w-3.5 h-3.5" /> Download Poster
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

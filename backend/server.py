@@ -112,9 +112,9 @@ ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 # Tier limits — "lifetime": True means total-ever, False means per-calendar-month
 TIER_CONFIG = {
     "free":    {"videos": 3,   "scripts": 5,   "posters": 5,   "lifetime": True,  "formats": ["9:16"]},
-    "starter": {"videos": 15,  "scripts": 50,  "posters": 50,  "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
-    "pro":     {"videos": 50,  "scripts": 200, "posters": 200, "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
-    "agency":  {"videos": 200, "scripts": 999, "posters": 999, "lifetime": False, "formats": ["9:16", "16:9", "1:1"]},
+    "starter": {"videos": 15,  "scripts": 50,  "posters": 50,  "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
+    "pro":     {"videos": 50,  "scripts": 200, "posters": 200, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
+    "agency":  {"videos": 200, "scripts": 999, "posters": 999, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
 }
 # Keep for backward compat (used in /me endpoint)
 FREE_TIER_LIMITS = {"scripts": 5, "videos": 3, "posters": 5}
@@ -125,8 +125,11 @@ STRIPE_AGENCY_PRICE_ID = os.getenv('STRIPE_AGENCY_PRICE_ID', '')
 # Modal.com GPU integration (Pro/Agency tier)
 MODAL_TOKEN_ID = os.getenv('MODAL_TOKEN_ID', '')
 MODAL_TOKEN_SECRET = os.getenv('MODAL_TOKEN_SECRET', '')
-MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'launchbusiness-ltx-video')
+MODAL_APP_NAME = os.getenv('MODAL_APP_NAME', 'launchbusiness-wan-video')
 MODAL_ENABLED = bool(MODAL_TOKEN_ID and MODAL_TOKEN_SECRET)
+
+# Pexels B-roll (optional — set PEXELS_API_KEY to enable real video backgrounds for all tiers)
+PEXELS_API_KEY = os.getenv('PEXELS_API_KEY', '')
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
 mongo_url = os.environ['MONGODB_URL']
@@ -404,6 +407,7 @@ class ScriptRequest(BaseModel):
     target_audience: str = Field(max_length=200)
     key_features: List[str]
     brand_context: Optional[str] = None
+    format: Optional[str] = None  # video format hint for length targeting ("9:16", "16:9", "1:1", "4:5")
 
     @field_validator("framework")
     @classmethod
@@ -433,18 +437,21 @@ class CompleteVideoRequest(BaseModel):
     product_name: Optional[str] = None
     features: List[str] = []
     description: Optional[str] = None
+    profile_id: Optional[str] = None
 
 class PosterRequest(BaseModel):
     headline: str
     subtext: str
     brand_colors: List[str]
     format: str = "1:1"
+    profile_id: Optional[str] = None
 
 class MagicButtonRequest(BaseModel):
     url: str
     product_name: str
     target_audience: str
     creative_direction: Optional[str] = Field(default=None, max_length=300)
+    profile_id: Optional[str] = None
 
 class Project(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -633,15 +640,20 @@ def _draw_gradient_bg(draw: ImageDraw.Draw, width: int, height: int, c1: tuple, 
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
 
+_FONTS_DIR = ROOT_DIR / "assets" / "fonts"
+
+
 def _get_font(size: int):
-    """Try to load a bold system font, fall back to default."""
+    """Load bold font. Poppins-ExtraBold (bundled) → system fonts → Pillow default."""
     candidates = [
-        # Windows
+        # Bundled brand fonts — highest priority
+        str(_FONTS_DIR / "Poppins-ExtraBold.ttf"),
+        str(_FONTS_DIR / "Poppins-Bold.ttf"),
+        # Windows fallbacks
         "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/Arial Bold.ttf",
         "C:/Windows/Fonts/calibrib.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
-        # Linux
+        # Linux fallbacks
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
@@ -658,11 +670,16 @@ def _get_font(size: int):
 
 
 def _get_regular_font(size: int):
-    """Try to load a regular system font."""
+    """Load regular font. DM Sans (bundled) → system fonts → Pillow default."""
     candidates = [
+        # Bundled brand fonts — highest priority
+        str(_FONTS_DIR / "DMSans-Medium.ttf"),
+        str(_FONTS_DIR / "DMSans-Regular.ttf"),
+        # Windows fallbacks
+        "C:/Windows/Fonts/segoeui.ttf",
         "C:/Windows/Fonts/arial.ttf",
         "C:/Windows/Fonts/calibri.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
+        # Linux fallbacks
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
@@ -717,6 +734,28 @@ def _draw_decorative_bar(draw, x, y, w, h, color):
     draw.rectangle([x, y, x + w, y + h], fill=color)
 
 
+def _paste_logo(img: Image.Image, logo_path: str, x: int, y: int, max_height: int = 60) -> None:
+    """Paste PNG logo onto img at (x, y), scaled to max_height. Non-fatal on any error."""
+    try:
+        logo = Image.open(logo_path).convert("RGBA")
+        ratio = max_height / logo.height
+        new_w = max(1, int(logo.width * ratio))
+        logo = logo.resize((new_w, max_height), Image.LANCZOS)
+        img.paste(logo, (x, y), logo)
+    except Exception:
+        pass
+
+
+def _logo_url_to_local(logo_url: str) -> Optional[str]:
+    """Convert /api/download/filename to OUTPUTS_DIR/filename if file exists."""
+    if not logo_url:
+        return None
+    m = re.match(r'^/api/download/([^/?#]+)', logo_url)
+    filename = m.group(1) if m else Path(logo_url).name
+    p = OUTPUTS_DIR / filename
+    return str(p) if p.exists() else None
+
+
 def _draw_checkmark(draw, cx, cy, r, color, width=4):
     """Draw a checkmark shape inside a circle of radius r centered at (cx, cy)."""
     # Tick mark: from bottom-left to mid-bottom, then up to top-right
@@ -729,7 +768,7 @@ def _draw_checkmark(draw, cx, cy, r, color, width=4):
     draw.line([(x1, y1), (x2, y2), (x3, y3)], fill=color, width=width)
 
 
-def _make_slide_hero(width, height, color1, color2, product_name, headline, dest_path):
+def _make_slide_hero(width, height, color1, color2, product_name, headline, dest_path, logo_path=None):
     """Slide 1 — Hero: product name + main headline, strong brand presence."""
     c1 = _hex_to_rgb(color1)
     c2 = _hex_to_rgb(color2)
@@ -775,6 +814,11 @@ def _make_slide_hero(width, height, color1, color2, product_name, headline, dest
 
     # Bottom decorative bar
     _draw_decorative_bar(draw, 0, height - height // 20, width, height // 20, (*_darken(c2, 0.15),))
+
+    # Brand logo — top-left, below the top bar
+    if logo_path:
+        logo_y = height // 20 + max(8, height // 120)
+        _paste_logo(img, logo_path, x=20, y=logo_y, max_height=max(50, height // 32))
 
     img.save(dest_path, 'JPEG', quality=92)
 
@@ -951,7 +995,7 @@ def _make_slide_how_it_works(width, height, color1, color2, steps, dest_path):
     img.save(dest_path, 'JPEG', quality=92)
 
 
-def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path):
+def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path, logo_path=None):
     """Slide 6 — CTA: URL, product name, urgency."""
     c1 = _hex_to_rgb(color1)
     c2 = _hex_to_rgb(color2)
@@ -1000,6 +1044,11 @@ def _make_slide_cta(width, height, color1, color2, product_name, url, dest_path)
     urg_font = _get_regular_font(max(16, width // 46))
     _draw_text_centered(draw, "Start your free trial now", urg_font,
                          height - strip_h + strip_h // 3, width, (255, 255, 255), shadow=False)
+
+    # Brand logo — centered just above urgency strip
+    if logo_path:
+        logo_h = max(44, height // 38)
+        _paste_logo(img, logo_path, x=20, y=height - strip_h - logo_h - 12, max_height=logo_h)
 
     img.save(dest_path, 'JPEG', quality=92)
 
@@ -1064,20 +1113,22 @@ def _make_design_slides(
     sentences: List[str],
     url: str,
     dest_dir: Path,
-    watermark: bool = False
+    watermark: bool = False,
+    logo_path: Optional[str] = None,
 ) -> List[str]:
     """
     Generate 6 structured marketing slide templates using Pillow.
     Returns list of file paths in slide order.
     Templates: Hero, Problem, Solution, Features, How It Works, CTA
     If watermark=True, burns 'LaunchBusiness AI' diagonally into each slide's content area.
+    If logo_path is set, renders brand logo on Hero (top-left) and CTA (bottom-left) slides.
     """
     slides = []
 
     # Slide 1: Hero
     p = str(dest_dir / "slide_hero.jpg")
     headline = sentences[0] if sentences else "Launch in 30 Seconds"
-    _make_slide_hero(width, height, color1, color2, product_name, headline, p)
+    _make_slide_hero(width, height, color1, color2, product_name, headline, p, logo_path=logo_path)
     slides.append(p)
 
     # Slide 2: Problem
@@ -1105,7 +1156,7 @@ def _make_design_slides(
 
     # Slide 6: CTA
     p = str(dest_dir / "slide_cta.jpg")
-    _make_slide_cta(width, height, color1, color2, product_name, url, p)
+    _make_slide_cta(width, height, color1, color2, product_name, url, p, logo_path=logo_path)
     slides.append(p)
 
     # Apply watermark to all design slides if requested (free tier only)
@@ -1122,33 +1173,40 @@ def _make_design_slides(
 async def _generate_modal_clip(
     prompt: str,
     aspect_ratio: str,
-    num_frames: int = 97,
+    num_frames: int = 49,
+    hero_slide_path: Optional[str] = None,
 ) -> Optional[bytes]:
     """
-    Call Modal LTX-Video serverless GPU to generate a short AI video clip.
+    Call Modal Wan 2.2 TI2V-5B to generate a longer background clip (~3s).
+    Pass hero_slide_path to animate the actual branded slide. ~$0.04.
     Returns raw MP4 bytes, or None if Modal is not configured / call fails.
-    This is a best-effort enhancement — callers must always handle None.
     """
     if not MODAL_ENABLED:
         return None
     try:
         import modal as _modal
         loop = asyncio.get_event_loop()
-        generator = _modal.Function.lookup(MODAL_APP_NAME, "LTXVideoGenerator.generate")
+
+        image_bytes = None
+        if hero_slide_path and Path(hero_slide_path).exists():
+            image_bytes = Path(hero_slide_path).read_bytes()
+
+        generator = _modal.Function.lookup(MODAL_APP_NAME, "WanVideoGenerator.generate")
         video_bytes: bytes = await loop.run_in_executor(
             None,
             lambda: generator.remote(
                 prompt=prompt,
                 aspect_ratio=aspect_ratio,
+                image_bytes=image_bytes,
                 num_frames=num_frames,
             )
         )
         if video_bytes and len(video_bytes) > 10_000:
-            logger.info(f"Modal LTX-Video generated {len(video_bytes)//1024} KB clip")
+            logger.info(f"Modal Wan 2.2 generated {len(video_bytes)//1024} KB clip")
             return video_bytes
         return None
     except Exception as e:
-        logger.warning(f"Modal LTX-Video skipped: {e}")
+        logger.warning(f"Modal Wan 2.2 skipped: {e}")
         return None
 
 
@@ -1165,6 +1223,344 @@ def _get_random_music_bed() -> Optional[str]:
         return str(random.choice(beds))
     except Exception:
         return None
+
+
+async def _fetch_pexels_clip(keywords: str, orientation: str, dest_path: str) -> bool:
+    """
+    Download a relevant stock video from Pexels as B-roll background.
+    Returns True if clip was saved to dest_path. Falls back gracefully — never raises.
+    orientation: 'portrait' | 'landscape' | 'square'
+    Requires PEXELS_API_KEY env var. Free tier at pexels.com/api gives 200 req/hr.
+    """
+    if not PEXELS_API_KEY:
+        return False
+    try:
+        query = re.sub(r'[^a-zA-Z0-9 ]', '', keywords)[:60].strip() or "business technology startup"
+        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+            resp = await client.get(
+                'https://api.pexels.com/videos/search',
+                params={'query': query, 'orientation': orientation, 'size': 'medium', 'per_page': 5},
+                headers={'Authorization': PEXELS_API_KEY}
+            )
+        if resp.status_code != 200:
+            logger.warning(f"Pexels search HTTP {resp.status_code} for '{query}'")
+            return False
+        videos = resp.json().get('videos', [])
+        if not videos:
+            logger.info(f"Pexels: no results for '{query}'")
+            return False
+        for video in videos:
+            files = [f for f in video.get('video_files', []) if f.get('quality') in ('hd', 'sd')]
+            if not files:
+                continue
+            best = max(files, key=lambda f: f.get('width', 0) * f.get('height', 0))
+            file_url = best.get('link', '')
+            if not file_url:
+                continue
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True, verify=False) as client:
+                video_resp = await client.get(file_url)
+            if video_resp.status_code == 200 and len(video_resp.content) > 100_000:
+                Path(dest_path).write_bytes(video_resp.content)
+                logger.info(f"Pexels clip saved: {len(video_resp.content)//1024}KB  {best.get('width')}x{best.get('height')}")
+                return True
+        logger.info("Pexels: no usable video file found in results")
+        return False
+    except Exception as e:
+        logger.warning(f"Pexels fetch failed (falling back to slideshow): {e}")
+        return False
+
+
+async def _generate_modal_short_clip(
+    prompt: str,
+    aspect_ratio: str,
+    num_frames: int = 25,
+    hero_slide_path: Optional[str] = None,
+) -> Optional[bytes]:
+    """
+    Generate a short (~1.5s) Wan 2.2 clip for hybrid intro/outro use.
+    Pass hero_slide_path to animate the actual branded Hero slide (real colors/logo).
+    Caller reverses clip for outro — one generation, two uses. ~$0.03.
+    """
+    if not MODAL_ENABLED:
+        return None
+    try:
+        import modal as _modal
+        loop = asyncio.get_event_loop()
+
+        image_bytes = None
+        if hero_slide_path and Path(hero_slide_path).exists():
+            image_bytes = Path(hero_slide_path).read_bytes()
+
+        generator = _modal.Function.lookup(MODAL_APP_NAME, "WanVideoGenerator.generate_short")
+        video_bytes: bytes = await loop.run_in_executor(
+            None,
+            lambda: generator.remote(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                image_bytes=image_bytes,
+                num_frames=num_frames,
+            )
+        )
+        if video_bytes and len(video_bytes) > 5_000:
+            logger.info(f"Modal Wan 2.2 clip: {len(video_bytes)//1024} KB")
+            return video_bytes
+        return None
+    except Exception as e:
+        logger.warning(f"Modal Wan 2.2 clip skipped: {e}")
+        return None
+
+
+async def _reverse_video_clip(input_path: str, output_path: str) -> bool:
+    """Reverse a video clip using FFmpeg's reverse filter (no audio needed for LTX clips)."""
+    cmd = f'"{FFMPEG_BIN}" -i "{input_path}" -vf reverse -y "{output_path}"'
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+    )
+    return result.returncode == 0 and Path(output_path).exists()
+
+
+async def _fetch_pexels_segments(
+    product_keywords: str,
+    orientation: str,
+    tmp_dir: Path,
+    num_clips: int = 3,
+) -> List[str]:
+    """
+    Fetch num_clips different Pexels video clips for the hybrid pipeline.
+    Uses different search queries per segment for visual variety:
+      Clip 0 (problem): product keyword — relatable pain
+      Clip 1 (solution): technology / workspace — the reveal
+      Clip 2 (outcome): success / growth — the aspiration
+    """
+    if not PEXELS_API_KEY:
+        return []
+
+    base_word = (product_keywords.split()[0] if product_keywords else "business").lower()
+    queries = [
+        product_keywords[:60] or "business challenge",
+        f"technology startup workspace {base_word}",
+        "success growth professional business",
+    ]
+
+    clips: List[str] = []
+    used_video_ids: set = set()
+
+    for i in range(min(num_clips, len(queries))):
+        dest = str(tmp_dir / f"pexels_seg_{i}.mp4")
+        query = re.sub(r'[^a-zA-Z0-9 ]', '', queries[i])[:60].strip() or "business"
+        try:
+            async with httpx.AsyncClient(timeout=15, verify=False) as client:
+                resp = await client.get(
+                    'https://api.pexels.com/videos/search',
+                    params={'query': query, 'orientation': orientation, 'size': 'medium', 'per_page': 10},
+                    headers={'Authorization': PEXELS_API_KEY}
+                )
+            if resp.status_code != 200:
+                continue
+            videos = [v for v in resp.json().get('videos', []) if v.get('id') not in used_video_ids]
+            if not videos:
+                continue
+            for video in videos:
+                if video.get('id') in used_video_ids:
+                    continue
+                files = [f for f in video.get('video_files', []) if f.get('quality') in ('hd', 'sd')]
+                if not files:
+                    continue
+                best = max(files, key=lambda f: f.get('width', 0) * f.get('height', 0))
+                file_url = best.get('link', '')
+                if not file_url:
+                    continue
+                async with httpx.AsyncClient(timeout=60, follow_redirects=True, verify=False) as client:
+                    vresp = await client.get(file_url)
+                if vresp.status_code == 200 and len(vresp.content) > 100_000:
+                    Path(dest).write_bytes(vresp.content)
+                    used_video_ids.add(video['id'])
+                    clips.append(dest)
+                    logger.info(f"Pexels segment {i}: '{query}' → {len(vresp.content)//1024}KB")
+                    break
+        except Exception as e:
+            logger.warning(f"Pexels segment {i} failed: {e}")
+
+    return clips
+
+
+def _make_pip_overlay(
+    product_img_path: str,
+    pip_w: int,
+    pip_h: int,
+    output_path: str,
+    corner_radius: int = 18,
+) -> bool:
+    """
+    Create a product screenshot PNG with rounded corners + subtle drop shadow for PiP overlay.
+    Returns True if the file was written successfully.
+    """
+    try:
+        img = Image.open(product_img_path).convert("RGBA")
+        img = img.resize((pip_w, pip_h), Image.LANCZOS)
+
+        # Rounded-corner mask
+        mask = Image.new("L", (pip_w, pip_h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, pip_w - 1, pip_h - 1], radius=corner_radius, fill=255)
+
+        rounded = Image.new("RGBA", (pip_w, pip_h), (0, 0, 0, 0))
+        rounded.paste(img, (0, 0), mask)
+
+        # Shadow: slightly larger translucent layer behind
+        shadow_offset = 6
+        canvas_w = pip_w + shadow_offset * 2
+        canvas_h = pip_h + shadow_offset * 2
+        canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+        shadow = Image.new("RGBA", (pip_w, pip_h), (0, 0, 0, 0))
+        ImageDraw.Draw(shadow).rounded_rectangle([0, 0, pip_w - 1, pip_h - 1], radius=corner_radius, fill=(0, 0, 0, 90))
+        canvas.paste(shadow, (shadow_offset, shadow_offset), shadow)
+        canvas.paste(rounded, (0, 0), rounded)
+        canvas.save(output_path, "PNG")
+        return True
+    except Exception as e:
+        logger.warning(f"PiP overlay failed: {e}")
+        return False
+
+
+def _pip_config(fmt: str, width: int, height: int) -> dict:
+    """
+    Return PiP dimensions and position for each output format.
+    The PiP shows the product screenshot as a floating element — like a phone/browser mockup.
+    """
+    configs = {
+        "9:16":  {"w": int(width * 0.72),  "h": int(width * 0.54),  "x": int(width * 0.14), "y": int(height * 0.44)},
+        "16:9":  {"w": int(width * 0.38),  "h": int(width * 0.24),  "x": int(width * 0.58), "y": int(height * 0.28)},
+        "1:1":   {"w": int(width * 0.62),  "h": int(width * 0.465), "x": int(width * 0.19), "y": int(height * 0.44)},
+        "4:5":   {"w": int(width * 0.70),  "h": int(width * 0.525), "x": int(width * 0.15), "y": int(height * 0.48)},
+    }
+    return configs.get(fmt, configs["9:16"])
+
+
+def _build_hybrid_ffmpeg(
+    video_segments: List[tuple],    # [(clip_path, duration_seconds), ...]
+    pip_path: Optional[str],        # product screenshot PNG with rounded corners
+    pip_start: float,               # when PiP appears (seconds into video)
+    pip_end: float,                 # when PiP disappears
+    pip_x: int, pip_y: int,
+    pip_w: int, pip_h: int,
+    logo_path: Optional[str],       # brand logo PNG
+    sentences: List[str],
+    color1: str,
+    width: int, height: int,
+    total_duration: float,
+    audio_path: Optional[str],
+    output_path: str,
+    watermark_text: Optional[str] = None,
+) -> str:
+    """
+    Build an FFmpeg command that assembles a multi-segment hybrid video:
+    - Concatenates video_segments (LTX clips, Pexels clips) to fill total_duration
+    - Overlays product screenshot as PiP during pip_start → pip_end
+    - Overlays brand logo in top-left corner throughout
+    - Adds TikTok-style word-chunk captions
+    - Adds branded progress bar at bottom
+    - Optionally burns watermark for free tier
+    Supports all 4 formats: 9:16, 16:9, 1:1, 4:5
+    """
+    inputs = ""
+    filter_parts = []
+    input_idx = 0
+    seg_labels = []
+
+    # ── Video segment inputs ────────────────────────────────────────────────────
+    for i, (clip_path, seg_dur) in enumerate(video_segments):
+        # -stream_loop -1 loops the clip if shorter than seg_dur
+        inputs += f' -stream_loop -1 -t {seg_dur:.3f} -i "{clip_path}"'
+        filter_parts.append(
+            f"[{input_idx}:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},fps=25,format=yuv420p,setpts=PTS-STARTPTS[vs{i}]"
+        )
+        seg_labels.append(f"[vs{i}]")
+        input_idx += 1
+
+    # ── Concat segments ─────────────────────────────────────────────────────────
+    if len(seg_labels) > 1:
+        filter_parts.append(f"{''.join(seg_labels)}concat=n={len(seg_labels)}:v=1:a=0[base]")
+    else:
+        filter_parts.append(f"{seg_labels[0]}copy[base]")
+
+    current = "base"
+
+    # ── PiP overlay (product screenshot) ───────────────────────────────────────
+    if pip_path and Path(pip_path).exists():
+        inputs += f' -loop 1 -i "{pip_path}"'
+        filter_parts.append(f"[{input_idx}:v]scale={pip_w}:{pip_h},format=rgba[pip]")
+        filter_parts.append(
+            f"[{current}][pip]overlay={pip_x}:{pip_y}:"
+            f"enable='between(t,{pip_start:.3f},{pip_end:.3f})'[pip_out]"
+        )
+        current = "pip_out"
+        input_idx += 1
+
+    # ── Logo overlay ────────────────────────────────────────────────────────────
+    if logo_path and Path(logo_path).exists():
+        logo_h = max(52, height // 32)
+        inputs += f' -i "{logo_path}"'
+        filter_parts.append(f"[{input_idx}:v]scale=-1:{logo_h},format=rgba[logo]")
+        filter_parts.append(f"[{current}][logo]overlay=20:20[logo_out]")
+        current = "logo_out"
+        input_idx += 1
+
+    # ── Captions + progress bar ─────────────────────────────────────────────────
+    cap_fs = max(52, width // 18)
+    c1 = _to_ffmpeg_color(color1)
+    full_script = ' '.join(sentences)
+    chunks = _word_chunk_captions(full_script, total_duration)
+
+    def _esc(s: str) -> str:
+        return (s.replace("'", "").replace("`", "").replace("$", "")
+                 .replace(":", " ").replace("\\", "").replace('"', "")
+                 .replace("\n", " ").replace("[", "").replace("]", "")
+                 .replace("*", "").replace("#", ""))[:80]
+
+    drawtext_parts = []
+    for txt, t0, t1 in chunks:
+        clean = _esc(txt)
+        if not clean:
+            continue
+        drawtext_parts.append(
+            f"drawtext=text='{clean}':fontsize={cap_fs}:fontcolor=white:"
+            f"borderw=4:bordercolor=black@0.9:"
+            f"x=(w-text_w)/2:y=h*0.80:"
+            f"enable='between(t,{t0:.3f},{t1:.3f})'"
+        )
+
+    # Progress bar
+    drawtext_parts.append(
+        f"drawbox=x=0:y=h-8:w='iw*t/{total_duration:.3f}':h=8:color={c1}@1.0:t=fill"
+    )
+
+    # Watermark for free tier
+    if watermark_text:
+        wm_fs = max(40, width // 20)
+        drawtext_parts.append(
+            f"drawtext=text='{watermark_text}':fontsize={wm_fs}:"
+            f"fontcolor=white@0.28:x=(w-text_w)/2:y=(h-text_h)/2"
+        )
+
+    filter_complex = ";".join(filter_parts) + f";[{current}]{','.join(drawtext_parts)}[vout]"
+
+    # ── Audio ───────────────────────────────────────────────────────────────────
+    if audio_path:
+        inputs += f' -i "{audio_path}"'
+        audio_map = f' -map "[vout]" -map {input_idx}:a -c:a aac -shortest'
+    else:
+        audio_map = ' -map "[vout]"'
+
+    return (
+        f'"{FFMPEG_BIN}"{inputs}'
+        f' -filter_complex "{filter_complex}"'
+        f'{audio_map}'
+        f' -t {total_duration:.3f} -threads 2 -c:v libx264 -preset ultrafast'
+        f' -crf 22 -pix_fmt yuv420p -y "{output_path}"'
+    )
 
 
 async def _mix_audio_with_music_bed(
@@ -1221,14 +1617,13 @@ def _ffmpeg_loop_clip_with_audio(
     Used for Pro tier Modal-generated clips.
     """
     c1 = _to_ffmpeg_color(color1)
-    fs = max(28, width // 28)
-    dur_per_cap = total_duration / max(len(sentences), 1)
+    cap_fs = max(52, width // 18)
 
     def _clean(s: str) -> str:
         return (s.replace("'", "").replace("`", "").replace("$", "")
                  .replace(":", " ").replace("\\", "").replace('"', "")
                  .replace("\n", " ").replace("[", "").replace("]", "")
-                 .replace("*", "").replace("#", ""))[:70]
+                 .replace("*", "").replace("#", ""))[:80]
 
     # Loop the clip with -stream_loop -1, scale to target resolution
     inputs = f"-stream_loop -1 -i \"{clip_path}\""
@@ -1239,16 +1634,19 @@ def _ffmpeg_loop_clip_with_audio(
         f"crop={width}:{height},fps=25,format=yuv420p[vbase]"
     )
 
+    # TikTok-style word-chunk captions
+    full_script = ' '.join(sentences)
+    chunks = _word_chunk_captions(full_script, total_duration)
     drawtext_parts = []
-    for i, s in enumerate(sentences):
-        t_start = i * dur_per_cap
-        t_end = (i + 1) * dur_per_cap
-        txt = _clean(s)
+    for txt, t_start, t_end in chunks:
+        txt_clean = _clean(txt)
+        if not txt_clean:
+            continue
         drawtext_parts.append(
-            f"drawtext=text='{txt}':"
-            f"fontsize={fs}:fontcolor=white:borderw=2:bordercolor=black:"
-            f"box=1:boxcolor=black@0.55:boxborderw=12:"
-            f"x=(w-text_w)/2:y=h*0.82:"
+            f"drawtext=text='{txt_clean}':"
+            f"fontsize={cap_fs}:fontcolor=white:"
+            f"borderw=4:bordercolor=black@0.9:"
+            f"x=(w-text_w)/2:y=h*0.80:"
             f"enable='between(t,{t_start:.3f},{t_end:.3f})'"
         )
     drawtext_parts.append(
@@ -1343,18 +1741,20 @@ def _build_slideshow_ffmpeg(
             )
             prev_label = out_label
 
-    # 3. Captions: timed to actual_duration timeline (one caption per sentence)
-    dur_per_cap = actual_duration / max(len(sentences), 1)
+    # 3. TikTok-style word-chunk captions across actual_duration
+    cap_fs = max(52, width // 18)
+    full_script = ' '.join(sentences)
+    chunks = _word_chunk_captions(full_script, actual_duration)
     drawtext_parts = []
-    for i, s in enumerate(sentences):
-        t_start = i * dur_per_cap
-        t_end = (i + 1) * dur_per_cap
-        txt = _clean(s)
+    for txt, t_start, t_end in chunks:
+        txt_clean = _clean(txt)
+        if not txt_clean:
+            continue
         drawtext_parts.append(
-            f"drawtext=text='{txt}':"
-            f"fontsize={fs}:fontcolor=white:borderw=2:bordercolor=black:"
-            f"box=1:boxcolor=black@0.55:boxborderw=12:"
-            f"x=(w-text_w)/2:y=h*0.82:"
+            f"drawtext=text='{txt_clean}':"
+            f"fontsize={cap_fs}:fontcolor=white:"
+            f"borderw=4:bordercolor=black@0.9:"
+            f"x=(w-text_w)/2:y=h*0.80:"
             f"enable='between(t,{t_start:.3f},{t_end:.3f})'"
         )
 
@@ -1414,24 +1814,40 @@ def _to_ffmpeg_color(h: str) -> str:
     return f"0x{h.upper()}"
 
 
+def _word_chunk_captions(script: str, total_duration: float, chunk_size: int = 3) -> List[tuple]:
+    """
+    Split script into word chunks for TikTok-style captions.
+    Returns list of (text, t_start, t_end) tuples covering total_duration.
+    3 words per frame = fast pace, easy to read on mobile.
+    """
+    words = re.sub(r'\s+', ' ', script).strip().split()
+    if not words:
+        return [("", 0.0, total_duration)]
+    chunks = [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    dur = total_duration / max(len(chunks), 1)
+    return [(text, round(i * dur, 3), round((i + 1) * dur, 3)) for i, text in enumerate(chunks)]
+
+
 def _fallback_ffmpeg(sentences, color1, width, height, duration_per_caption, audio_path, output_path) -> str:
     total = len(sentences) * duration_per_caption
     c1 = _to_ffmpeg_color(color1)
-    fs = max(28, width // 28)
+    cap_fs = max(52, width // 18)
 
     def _clean(s):
-        # Remove chars that break FFmpeg filter syntax
-        return s.replace("'", "").replace("`", "").replace("$", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ").replace("[", "").replace("]", "").replace("*", "").replace("#", "")[:70]
+        return s.replace("'", "").replace("`", "").replace("$", "").replace(":", " ").replace("\\", "").replace('"', "").replace("\n", " ").replace("[", "").replace("]", "").replace("*", "").replace("#", "")[:80]
 
+    full_script = ' '.join(sentences)
+    chunks = _word_chunk_captions(full_script, total)
     drawtext_parts = []
-    for i, s in enumerate(sentences):
-        t_start = i * duration_per_caption
-        t_end = (i + 1) * duration_per_caption
-        txt = _clean(s)
+    for txt, t_start, t_end in chunks:
+        txt_clean = _clean(txt)
+        if not txt_clean:
+            continue
         drawtext_parts.append(
-            f"drawtext=text='{txt}':"
-            f"fontsize={fs}:fontcolor=white:borderw=3:bordercolor=black:"
-            f"x=(w-text_w)/2:y=h*0.75:"
+            f"drawtext=text='{txt_clean}':"
+            f"fontsize={cap_fs}:fontcolor=white:"
+            f"borderw=4:bordercolor=black@0.9:"
+            f"x=(w-text_w)/2:y=h*0.80:"
             f"enable='between(t,{t_start:.2f},{t_end:.2f})'"
         )
 
@@ -1610,8 +2026,19 @@ async def delete_upload(file_id: str):
     return {"deleted": file_id}
 
 
+# Duration and word-count targets per output format so Gemini writes appropriately-sized scripts.
+# Word counts assume ~150 words/minute spoken pace.
+_FORMAT_SCRIPT_TARGETS: dict = {
+    "9:16": ("21-34",  "75-120"),   # TikTok / Reels / Shorts
+    "16:9": ("60-90",  "200-300"),  # YouTube / LinkedIn
+    "1:1":  ("30-60",  "100-200"),  # Instagram square
+    "4:5":  ("15-30",  "50-100"),   # Facebook / IG Feed
+}
+
+
 def _build_script_prompt(request: "ScriptRequest") -> str:
     features = ', '.join(request.key_features) if request.key_features else "easy, fast, reliable"
+    target_secs, target_words = _FORMAT_SCRIPT_TARGETS.get(request.format or "9:16", ("30-60", "100-200"))
 
     # Creative direction injection — shapes tone, hook, and energy of the script
     creative_note = ""
@@ -1625,23 +2052,23 @@ def _build_script_prompt(request: "ScriptRequest") -> str:
         )
 
     frameworks = {
-        "PAS": f"""Write a 60-second video ad script for {request.product_name} using Problem-Agitate-Solution.
+        "PAS": f"""Write a {target_secs}-second video ad script (~{target_words} words) for {request.product_name} using Problem-Agitate-Solution.
 Target audience: {request.target_audience}
 Key features: {features}
-Structure: Problem (15s) → Agitate (20s) → Solution (25s) with CTA.
-Be conversational and authentic. Return only the script text.{creative_note}""",
+Structure: Problem → Agitate → Solution with CTA.
+Be conversational and authentic. Return only the script text, no labels.{creative_note}""",
 
-        "Step-by-Step": f"""Write a 60-second tutorial script for {request.product_name}.
+        "Step-by-Step": f"""Write a {target_secs}-second tutorial script (~{target_words} words) for {request.product_name}.
 Target audience: {request.target_audience}
 Key features: {features}
-Structure: Intro (10s) → 3 clear steps (40s) → Encouragement + CTA (10s).
-Be simple and encouraging. Return only the script text.{creative_note}""",
+Structure: Hook → 3 clear steps → CTA.
+Be simple and encouraging. Return only the script text, no labels.{creative_note}""",
 
-        "Before/After": f"""Write a 60-second Before/After transformation script for {request.product_name}.
+        "Before/After": f"""Write a {target_secs}-second Before/After transformation script (~{target_words} words) for {request.product_name}.
 Target audience: {request.target_audience}
 Key features: {features}
-Structure: Before struggle (20s) → Discovery (10s) → After transformation (30s).
-Be emotional and aspirational. Return only the script text.{creative_note}""",
+Structure: Before struggle → Discovery → After transformation.
+Be emotional and aspirational. Return only the script text, no labels.{creative_note}""",
     }
     return frameworks.get(request.framework, frameworks["PAS"])
 
@@ -1796,13 +2223,27 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
     await check_usage_limit(user, "videos")
     await check_format_allowed(user, request.format)
     video_id = str(uuid.uuid4())
-    format_map = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080)}
+    format_map = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:5": (1080, 1350)}
     width, height = format_map.get(request.format, (1080, 1080))
 
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', request.script) if s.strip()][:12]
     if not sentences:
         sentences = [request.script.strip()[:80]]
     total_duration = len(sentences) * 3.0
+
+    # Resolve brand profile logo if profile_id provided
+    slide_logo_path: Optional[str] = None
+    if request.profile_id and user:
+        try:
+            profile_doc = await db.brand_profiles.find_one(
+                {"id": request.profile_id, "user_id": user["id"]}, {"_id": 0}
+            )
+            if profile_doc and profile_doc.get("active_logo_url"):
+                slide_logo_path = _logo_url_to_local(profile_doc["active_logo_url"])
+                if slide_logo_path:
+                    logger.info(f"Brand profile logo resolved: {slide_logo_path}")
+        except Exception as _prof_err:
+            logger.warning(f"Brand profile lookup failed (non-fatal): {_prof_err}")
 
     # Generate voiceover
     audio_path = None
@@ -1858,7 +2299,8 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
             sentences=sentences,
             url="",
             dest_dir=tmp_dir,
-            watermark=apply_watermark
+            watermark=apply_watermark,
+            logo_path=slide_logo_path,
         )
     )
 
@@ -1891,13 +2333,29 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
         combined = combined[:TARGET_SLIDES]
 
     local_images = combined
-    total_duration = len(local_images) * 3.0  # 3s per slide
 
-    # ── Background music bed (paid tiers only) ────────────────────────────────
-    # Starter / Pro / Agency get a subtle music bed mixed under the voiceover.
-    # Free tier gets raw TTS only (no music).
-    # If no .mp3 files are in assets/music_beds/ the step is silently skipped.
-    if audio_path and (user_tier in ("starter", "pro", "agency") or free_trial_eligible):
+    # Audio-driven duration: match video length to narration, clamped to format range.
+    # Flat 3s/slide fallback only when TTS is absent (no voiceover requested).
+    _fmt_dur_range = {"9:16": (15.0, 34.0), "16:9": (30.0, 90.0), "1:1": (15.0, 60.0), "4:5": (12.0, 30.0)}
+    _dur_min, _dur_max = _fmt_dur_range.get(request.format, (15.0, 60.0))
+    if audio_path and Path(audio_path).exists():
+        try:
+            _dur_res = await loop.run_in_executor(
+                None,
+                lambda p=audio_path: subprocess.run(
+                    f'ffprobe -v quiet -show_entries format=duration -of csv=p=0 "{p}"',
+                    shell=True, capture_output=True, text=True, timeout=10
+                ),
+            )
+            _audio_dur = float(_dur_res.stdout.strip())
+            total_duration = max(_dur_min, min(_audio_dur + 1.5, _dur_max))
+        except Exception:
+            total_duration = len(local_images) * 3.0
+    else:
+        total_duration = len(local_images) * 3.0
+
+    # ── Music bed — ALL paid tiers (Starter, Pro, Agency) ────────────────────
+    if audio_path and user_tier in ("starter", "pro", "agency"):
         music_bed = _get_random_music_bed()
         if music_bed:
             mixed_audio_path = str(OUTPUTS_DIR / f"{video_id}_mixed_audio.mp3")
@@ -1908,66 +2366,190 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
                 if mixed_ok:
                     audio_path = mixed_audio_path
             except Exception as _mix_err:
-                logger.warning(f"Music bed skipped (mixing error): {_mix_err}")
+                logger.warning(f"Music bed skipped: {_mix_err}")
 
-    # ── Pro/Agency: try Modal LTX-Video GPU ──────────────────────────────────
-    # Build a rich visual prompt from the product name + script
-    modal_used = False
-    if (user_tier in ("pro", "agency") or free_trial_eligible) and MODAL_ENABLED:
-        product_ctx = request.product_name or ""
-        prompt_for_modal = (
-            f"Professional marketing video for {product_ctx}. "
-            f"{sentences[0] if sentences else ''} "
-            "Sleek modern aesthetic, smooth cinematic motion, vibrant brand colors, "
-            "high production quality, no text, no watermarks."
-        )[:500]
-        logger.info(f"Attempting Modal LTX-Video for {user_tier} user …")
-        clip_bytes = await _generate_modal_clip(
-            prompt=prompt_for_modal,
-            aspect_ratio=request.format,
-            num_frames=97,  # ~4s clip that will be looped to full duration
-        )
-        if clip_bytes:
-            # Save clip to temp file, then loop+overlay with FFmpeg
-            modal_clip_path = str(tmp_dir / "modal_clip.mp4")
-            with open(modal_clip_path, "wb") as f:
-                f.write(clip_bytes)
+    # ── QUALITY-FLAT VIDEO PIPELINE ───────────────────────────────────────────
+    # ALL tiers get the same quality. Watermark is the only free-tier restriction.
+    # Priority:
+    #   1. Hybrid (Pexels + LTX) — when BOTH keys configured
+    #   2. Pexels-only            — when only PEXELS_API_KEY set
+    #   3. LTX-only               — when only Modal configured
+    #   4. Slideshow fallback     — always works
+    # ─────────────────────────────────────────────────────────────────────────
 
-            cmd = _ffmpeg_loop_clip_with_audio(
-                clip_path=modal_clip_path,
-                sentences=sentences,
-                color1=color1,
-                width=width, height=height,
-                total_duration=total_duration,
-                audio_path=audio_path,
-                output_path=output_path,
+    video_engine = "slideshow"  # tracks which engine actually rendered
+    orientation_map = {"9:16": "portrait", "16:9": "landscape", "1:1": "square", "4:5": "portrait"}
+    pexels_orientation = orientation_map.get(request.format, "portrait")
+    product_keywords = f"{request.product_name or ''} {' '.join((request.features or [])[:2])}".strip()
+
+    # ── Product PiP setup (used by hybrid + Pexels pipelines) ────────────────
+    pip_cfg = _pip_config(request.format, width, height)
+    pip_path: Optional[str] = None
+    product_img = local_images[0] if local_images else None
+    if product_img:
+        pip_out = str(tmp_dir / "pip_overlay.png")
+        if _make_pip_overlay(product_img, pip_cfg["w"], pip_cfg["h"], pip_out):
+            pip_path = pip_out
+
+    # ── 1. HYBRID: Pexels + LTX ──────────────────────────────────────────────
+    if PEXELS_API_KEY and MODAL_ENABLED:
+        logger.info("Attempting hybrid pipeline (Pexels + LTX) …")
+        try:
+            # Generate ONE short Wan 2.2 clip (~1.5s) animating the Hero slide
+            # hero_slide_path = first local image (the Hero Pillow slide PNG)
+            hero_slide_path = local_images[0] if local_images else None
+            ltx_prompt = (
+                f"Cinematic brand animation for {request.product_name or 'a product'}. "
+                f"Smooth motion reveal, {color1} brand colors, "
+                "professional premium feel, no text."
+            )[:300]
+            ltx_bytes = await _generate_modal_short_clip(
+                ltx_prompt, request.format,
+                num_frames=25,
+                hero_slide_path=hero_slide_path,
             )
-            logger.info("Running FFmpeg loop+overlay on Modal clip …")
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=180)
-            )
-            if result.returncode == 0 and Path(output_path).exists():
-                modal_used = True
-                logger.info("Modal LTX-Video pipeline completed successfully.")
-                # Consume free Pro trial on first successful Modal generation
-                if free_trial_eligible and user:
-                    await db.users.update_one(
-                        {"id": user["id"]},
-                        {"$set": {"free_pro_trial_used": True}}
-                    )
-            else:
-                logger.warning(f"FFmpeg loop failed (falling back to slideshow): {result.stderr[-300:]}")
 
-    # ── Slideshow fallback (free/starter or Modal unavailable/failed) ─────────
-    if not modal_used:
+            pexels_clips = await _fetch_pexels_segments(
+                product_keywords, pexels_orientation, tmp_dir, num_clips=3
+            )
+
+            if ltx_bytes and pexels_clips:
+                # Save LTX clip + create reversed version for outro
+                ltx_path = str(tmp_dir / "ltx_intro.mp4")
+                ltx_rev_path = str(tmp_dir / "ltx_outro.mp4")
+                with open(ltx_path, "wb") as f:
+                    f.write(ltx_bytes)
+                await _reverse_video_clip(ltx_path, ltx_rev_path)
+
+                # Build segment list: LTX intro + Pexels clips + LTX outro
+                intro_dur = min(1.5, total_duration * 0.08)
+                outro_dur = min(1.5, total_duration * 0.08) if Path(ltx_rev_path).exists() else 0
+                pexels_total = total_duration - intro_dur - outro_dur
+                n = len(pexels_clips)
+                weights = [0.25, 0.45, 0.30][:n]
+                total_w = sum(weights)
+                pexels_durs = [pexels_total * w / total_w for w in weights]
+
+                video_segs: List[tuple] = [(ltx_path, intro_dur)]
+                for clip, dur in zip(pexels_clips, pexels_durs):
+                    video_segs.append((clip, dur))
+                if Path(ltx_rev_path).exists():
+                    video_segs.append((ltx_rev_path, outro_dur))
+
+                # PiP appears during the middle Pexels segment (solution section)
+                pip_start_t = intro_dur + (pexels_durs[0] if n > 1 else 0)
+                pip_end_t = pip_start_t + (pexels_durs[1] if n > 1 else pexels_durs[0])
+
+                cmd = _build_hybrid_ffmpeg(
+                    video_segments=video_segs,
+                    pip_path=pip_path,
+                    pip_start=pip_start_t, pip_end=pip_end_t,
+                    pip_x=pip_cfg["x"], pip_y=pip_cfg["y"],
+                    pip_w=pip_cfg["w"], pip_h=pip_cfg["h"],
+                    logo_path=slide_logo_path,
+                    sentences=sentences, color1=color1,
+                    width=width, height=height,
+                    total_duration=total_duration,
+                    audio_path=audio_path,
+                    output_path=output_path,
+                    watermark_text="LaunchBusiness AI" if apply_watermark else None,
+                )
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
+                )
+                if result.returncode == 0 and Path(output_path).exists():
+                    video_engine = "hybrid-pexels-ltx"
+                    logger.info("Hybrid (Pexels + LTX) pipeline completed.")
+                else:
+                    logger.warning(f"Hybrid FFmpeg failed: {result.stderr[-300:]}")
+        except Exception as _hyb_err:
+            logger.warning(f"Hybrid pipeline error: {_hyb_err}")
+
+    # ── 2. PEXELS-ONLY (when no Modal or hybrid failed) ───────────────────────
+    if video_engine == "slideshow" and PEXELS_API_KEY:
+        logger.info("Attempting Pexels-only pipeline …")
+        try:
+            pexels_clips = await _fetch_pexels_segments(
+                product_keywords, pexels_orientation, tmp_dir, num_clips=3
+            )
+            if pexels_clips:
+                n = len(pexels_clips)
+                seg_dur = total_duration / n
+                video_segs = [(clip, seg_dur) for clip in pexels_clips]
+
+                pip_start_t = seg_dur if n > 1 else 0
+                pip_end_t = pip_start_t + (seg_dur if n > 1 else total_duration)
+
+                cmd = _build_hybrid_ffmpeg(
+                    video_segments=video_segs,
+                    pip_path=pip_path,
+                    pip_start=pip_start_t, pip_end=pip_end_t,
+                    pip_x=pip_cfg["x"], pip_y=pip_cfg["y"],
+                    pip_w=pip_cfg["w"], pip_h=pip_cfg["h"],
+                    logo_path=slide_logo_path,
+                    sentences=sentences, color1=color1,
+                    width=width, height=height,
+                    total_duration=total_duration,
+                    audio_path=audio_path,
+                    output_path=output_path,
+                    watermark_text="LaunchBusiness AI" if apply_watermark else None,
+                )
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=240)
+                )
+                if result.returncode == 0 and Path(output_path).exists():
+                    video_engine = "pexels"
+                    logger.info("Pexels-only pipeline completed.")
+                else:
+                    logger.warning(f"Pexels FFmpeg failed: {result.stderr[-300:]}")
+        except Exception as _pex_err:
+            logger.warning(f"Pexels pipeline error: {_pex_err}")
+
+    # ── 3. LTX-ONLY (when no Pexels or above failed) ─────────────────────────
+    if video_engine == "slideshow" and MODAL_ENABLED:
+        logger.info("Attempting LTX-only pipeline …")
+        try:
+            ltx_prompt = (
+                f"Professional marketing video for {request.product_name or 'a product'}. "
+                f"{sentences[0] if sentences else ''} "
+                "Sleek modern aesthetic, smooth cinematic motion, vibrant brand colors, "
+                "high production quality, no text, no watermarks."
+            )[:500]
+            clip_bytes = await _generate_modal_clip(
+                ltx_prompt, request.format,
+                num_frames=49,
+                hero_slide_path=local_images[0] if local_images else None,
+            )
+            if clip_bytes:
+                ltx_path = str(tmp_dir / "ltx_full.mp4")
+                with open(ltx_path, "wb") as f:
+                    f.write(clip_bytes)
+                cmd = _ffmpeg_loop_clip_with_audio(
+                    clip_path=ltx_path, sentences=sentences, color1=color1,
+                    width=width, height=height, total_duration=total_duration,
+                    audio_path=audio_path, output_path=output_path,
+                )
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=180)
+                )
+                if result.returncode == 0 and Path(output_path).exists():
+                    video_engine = "ltx"
+                    logger.info("LTX-only pipeline completed.")
+                else:
+                    logger.warning(f"LTX FFmpeg failed: {result.stderr[-300:]}")
+        except Exception as _ltx_err:
+            logger.warning(f"LTX pipeline error: {_ltx_err}")
+
+    # ── 4. SLIDESHOW FALLBACK (always works) ──────────────────────────────────
+    if video_engine == "slideshow":
         cmd = _build_slideshow_ffmpeg(
             local_images, sentences, color1, width, height,
             total_duration, audio_path, output_path
         )
-        logger.info(f"Running FFmpeg slideshow ({len(local_images)} slides) …")
-        loop = asyncio.get_event_loop()
+        logger.info(f"Slideshow fallback ({len(local_images)} slides) …")
         result = await loop.run_in_executor(
             None,
             lambda: subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
@@ -1992,8 +2574,7 @@ async def create_complete_video(request: CompleteVideoRequest, user = Depends(ge
         "format": request.format,
         "duration": total_duration,
         "has_audio": audio_path is not None,
-        "engine": "ltx-video" if modal_used else "slideshow",
-        "pro_trial_used": modal_used and free_trial_eligible,
+        "engine": video_engine,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "type": "video"
     }
@@ -2091,56 +2672,57 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
     poster_path = OUTPUTS_DIR / f"{poster_id}.png"
 
     try:
-        if request.format == "1:1":
-            width, height = 1080, 1080
-        else:
-            width, height = 1080, 1920
+        _format_map_poster = {"1:1": (1080, 1080), "9:16": (1080, 1920), "4:5": (1080, 1350), "16:9": (1920, 1080)}
+        width, height = _format_map_poster.get(request.format, (1080, 1080))
 
-        bg_color = request.brand_colors[0] if request.brand_colors else "#6366f1"
-        img = Image.new('RGB', (width, height), color=bg_color)
+        c1 = _hex_to_rgb(request.brand_colors[0]) if request.brand_colors else (99, 102, 241)
+        c2 = _hex_to_rgb(request.brand_colors[1]) if len(request.brand_colors) > 1 else (139, 92, 246)
+
+        img = Image.new('RGB', (width, height))
         draw = ImageDraw.Draw(img)
+        _draw_gradient_bg(draw, width, height, _darken(c1, 0.15), _darken(c2, 0.05))
 
-        # Try platform-specific font paths
-        _font_candidates = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-        ]
-        _sub_candidates = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-        ]
-        title_font = ImageFont.load_default()
-        subtitle_font = ImageFont.load_default()
-        for fp in _font_candidates:
-            try:
-                title_font = ImageFont.truetype(fp, 80)
-                break
-            except Exception:
-                pass
-        for fp in _sub_candidates:
-            try:
-                subtitle_font = ImageFont.truetype(fp, 40)
-                break
-            except Exception:
-                pass
+        # Decorative accent bar
+        accent = _lighten(c1, 0.5)
+        _draw_decorative_bar(draw, 0, 0, width, max(8, height // 30), (*accent, 255))
 
-        text_color = "#ffffff"
+        title_font    = _get_font(max(60, width // 12))
+        subtitle_font = _get_regular_font(max(32, width // 24))
 
-        bbox = draw.textbbox((0, 0), request.headline, font=title_font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        text_x = (width - text_width) // 2
-        text_y = height // 3
+        # Headline — centered, wrapped
+        headline_lines = _wrap_text(request.headline[:80], title_font, int(width * 0.85), draw)
+        line_h = max(70, width // 10)
+        block_h = len(headline_lines) * line_h
+        start_y = (height - block_h) // 2 - int(height * 0.05)
+        for i, line in enumerate(headline_lines):
+            _draw_text_centered(draw, line, title_font, start_y + i * line_h, width, (255, 255, 255))
 
-        draw.text((text_x, text_y), request.headline, fill=text_color, font=title_font)
-
+        # Subtext
         if request.subtext:
-            bbox2 = draw.textbbox((0, 0), request.subtext, font=subtitle_font)
-            sub_width = bbox2[2] - bbox2[0]
-            sub_x = (width - sub_width) // 2
-            sub_y = text_y + text_height + 50
-            draw.text((sub_x, sub_y), request.subtext, fill=text_color, font=subtitle_font)
+            sub_y = start_y + block_h + int(height * 0.04)
+            sub_lines = _wrap_text(request.subtext[:100], subtitle_font, int(width * 0.80), draw)
+            for i, line in enumerate(sub_lines):
+                _draw_text_centered(draw, line, subtitle_font, sub_y + i * max(40, width // 18),
+                                    width, (*_lighten(c1, 0.7),), shadow=False)
+
+        # Bottom urgency bar
+        strip_h = max(10, height // 18)
+        draw.rectangle([0, height - strip_h, width, height], fill=(*accent,))
+
+        # Resolve logo from brand profile
+        _poster_logo_path = None
+        if request.profile_id and user:
+            try:
+                _prof = await db.brand_profiles.find_one(
+                    {"id": request.profile_id, "user_id": user["id"]}, {"_id": 0}
+                )
+                if _prof and _prof.get("active_logo_url"):
+                    _poster_logo_path = _logo_url_to_local(_prof["active_logo_url"])
+            except Exception:
+                pass
+
+        if _poster_logo_path:
+            _paste_logo(img, _poster_logo_path, x=20, y=height - strip_h - 60, max_height=44)
 
         img.save(poster_path)
 
@@ -2179,61 +2761,81 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
     # Step 1: Scrape
     brand_data = await scrape_url(url=request.url)
 
-    # Step 2 & 3: Scripts
-    # creative_direction is passed as brand_context → injected into Gemini prompt
-    script_req = ScriptRequest(
-        framework="PAS",
-        product_name=request.product_name,
-        target_audience=request.target_audience,
-        key_features=brand_data["features"][:3] or ["easy", "fast", "reliable"],
-        brand_context=request.creative_direction or None,
-    )
-    ad_script = await generate_script(script_req, user=None)
+    # Step 2 & 3: Scripts — generate all 5 format-specific scripts concurrently.
+    # Each format gets a word-count-targeted prompt so audio length matches video format.
+    _features = brand_data["features"][:3] or ["easy", "fast", "reliable"]
 
-    script_req.framework = "Step-by-Step"
-    tutorial_script = await generate_script(script_req, user=None)
+    def _make_req(framework: str, fmt: str) -> ScriptRequest:
+        return ScriptRequest(
+            framework=framework,
+            format=fmt,
+            product_name=request.product_name,
+            target_audience=request.target_audience,
+            key_features=_features,
+            brand_context=request.creative_direction or None,
+        )
+
+    _script_results = await asyncio.gather(
+        generate_script(_make_req("PAS",          "9:16"), user=None),
+        generate_script(_make_req("Step-by-Step", "16:9"), user=None),
+        generate_script(_make_req("Before/After", "9:16"), user=None),
+        generate_script(_make_req("PAS",          "1:1"),  user=None),
+        generate_script(_make_req("PAS",          "4:5"),  user=None),
+        return_exceptions=True,
+    )
+    def _ok(r, fallback=""):
+        return r if isinstance(r, dict) and "content" in r else {"content": fallback}
+
+    ad_script       = _ok(_script_results[0])
+    tutorial_script = _ok(_script_results[1])
+    hook_script     = _ok(_script_results[2]) if not isinstance(_script_results[2], Exception) else None
+    _ad_11_script   = _ok(_script_results[3])
+    _ad_45_script   = _ok(_script_results[4])
 
     scraped_images = brand_data.get("images", [])
 
     features = brand_data.get("features", [])[:5]
 
-    # Step 4: Ad video
-    ad_video = None
-    try:
-        ad_video_req = CompleteVideoRequest(
-            script=truncate_to_sentences(ad_script["content"]),
-            images=scraped_images,
-            brand_colors=brand_data["colors"],
-            format="9:16",
-            add_voiceover=True,
-            add_captions=True,
-            add_progress_bar=True,
-            product_name=request.product_name,
-            features=features,
-            description=brand_data.get("description", "")[:150]
-        )
-        ad_video = await create_complete_video(ad_video_req, user=None)
-    except Exception as e:
-        logger.warning(f"Ad video creation failed: {e}, skipping")
+    # Steps 4-7: Generate ALL 4 formats in parallel. Each format has its own
+    # format-targeted script so word count and pacing match the output aspect ratio.
+    _ad_script_text    = truncate_to_sentences(ad_script["content"])
+    _tutor_script_text = truncate_to_sentences(tutorial_script["content"])
+    _ad_11_text        = truncate_to_sentences(_ad_11_script["content"])
+    _ad_45_text        = truncate_to_sentences(_ad_45_script["content"])
 
-    # Step 5: Tutorial video
-    tutorial_video = None
-    try:
-        tutorial_video_req = CompleteVideoRequest(
-            script=truncate_to_sentences(tutorial_script["content"]),
-            images=scraped_images,
-            brand_colors=brand_data["colors"],
-            format="16:9",
-            add_voiceover=True,
-            add_captions=True,
-            add_progress_bar=True,
-            product_name=request.product_name,
-            features=features,
-            description=brand_data.get("description", "")[:150]
-        )
-        tutorial_video = await create_complete_video(tutorial_video_req, user=None)
-    except Exception as e:
-        logger.warning(f"Tutorial video creation failed: {e}, skipping")
+    _common = dict(
+        images=scraped_images,
+        brand_colors=brand_data["colors"],
+        add_voiceover=True,
+        add_captions=True,
+        add_progress_bar=True,
+        product_name=request.product_name,
+        features=features,
+        description=brand_data.get("description", "")[:150],
+        profile_id=request.profile_id,
+    )
+
+    async def _make_video(script_text: str, fmt: str) -> Optional[dict]:
+        try:
+            return await create_complete_video(
+                CompleteVideoRequest(script=script_text, format=fmt, **_common),
+                user=None
+            )
+        except Exception as exc:
+            logger.warning(f"Video {fmt} failed: {exc}")
+            return None
+
+    # Run all 4 format renders concurrently, each with its format-matched script
+    (ad_916, ad_169, ad_11, ad_45) = await asyncio.gather(
+        _make_video(_ad_script_text,    "9:16"),
+        _make_video(_tutor_script_text, "16:9"),
+        _make_video(_ad_11_text,        "1:1"),
+        _make_video(_ad_45_text,        "4:5"),
+        return_exceptions=False,
+    )
+
+    ad_video      = ad_916
+    tutorial_video = ad_169
 
     # Step 6: Posters
     poster1 = await create_poster(PosterRequest(
@@ -2253,8 +2855,13 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
         "brand_data": brand_data,
         "ad_script": ad_script,
         "tutorial_script": tutorial_script,
-        "ad_video": ad_video,
-        "tutorial_video": tutorial_video,
+        "hook_variants": [s for s in [ad_script, tutorial_script, hook_script] if s and isinstance(s, dict)],
+        # All 4 format videos
+        "ad_video":       ad_video,       # 9:16  TikTok / Reels / Shorts
+        "tutorial_video": tutorial_video, # 16:9  YouTube / LinkedIn
+        "video_1_1":      ad_11,          # 1:1   Instagram / Twitter
+        "video_4_5":      ad_45,          # 4:5   Facebook / IG Feed
+        "videos_all": [v for v in [ad_916, ad_169, ad_11, ad_45] if v],
         "posters": [poster1, poster2]
     }
 
@@ -2283,6 +2890,49 @@ async def magic_button(request: MagicButtonRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Magic button failed: {str(e)}")
+
+
+@api_router.get("/download-pack")
+async def download_pack(ids: str, user=Depends(get_optional_user)):
+    """
+    Download multiple output files as a single ZIP.
+    ids = comma-separated list of file IDs (without extension) or full filenames.
+    Returns a streaming ZIP response.
+    """
+    import zipfile, io as _io
+    filenames = [f.strip() for f in ids.split(",") if f.strip()]
+    if not filenames:
+        raise HTTPException(status_code=400, detail="No file IDs provided")
+    if len(filenames) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 files per ZIP")
+
+    buf = _io.BytesIO()
+    found = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name in filenames:
+            # Accept both bare IDs and filenames with extension
+            candidates = [OUTPUTS_DIR / name]
+            if "." not in name:
+                for ext in (".mp4", ".png", ".jpg", ".jpeg", ".mp3"):
+                    candidates.append(OUTPUTS_DIR / f"{name}{ext}")
+            for candidate in candidates:
+                safe = candidate.resolve()
+                if not str(safe).startswith(str(OUTPUTS_DIR.resolve())):
+                    continue
+                if safe.exists():
+                    zf.write(safe, safe.name)
+                    found += 1
+                    break
+
+    if found == 0:
+        raise HTTPException(status_code=404, detail="None of the requested files were found")
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=launchbusiness-pack.zip"}
+    )
 
 
 @api_router.get("/download/{filename}")
@@ -3471,8 +4121,161 @@ async def get_saved_logos(user=Depends(get_current_user)):
     return logos
 
 
+@api_router.post("/tutorial/process")
+async def process_tutorial_video(
+    video: UploadFile = File(...),
+    format: str = Form(default="16:9"),
+    product_name: str = Form(default=""),
+    brand_color: str = Form(default="#6366f1"),
+    user=Depends(get_current_user),
+):
+    """
+    Tutorial Studio endpoint.
+    Receives a WebM screen recording from the Chrome extension.
+    Extracts frames → Gemini Vision narrates each → Edge TTS voices it →
+    _build_slideshow_ffmpeg assembles a polished 16:9 YouTube tutorial MP4.
+    Starter+ only. Counts as 1 video credit.
+    """
+    tier = user.get("tier", "free")
+    if tier == "free":
+        raise HTTPException(
+            status_code=403,
+            detail="Tutorial Studio requires Starter plan or higher. Upgrade at /pricing.",
+        )
+    await check_usage_limit(user, "videos")
+    await check_format_allowed(user, format)
+
+    if not _gemini_ready or _gemini_client is None:
+        raise HTTPException(status_code=503, detail="Gemini not configured — Tutorial Studio unavailable.")
+
+    video_bytes = await video.read()
+    if len(video_bytes) > 300 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Recording too large (max 300 MB).")
+    if len(video_bytes) < 10_000:
+        raise HTTPException(status_code=400, detail="Recording too small — was the tab captured?")
+
+    job_id = uuid.uuid4().hex[:12]
+    tmp_dir = Path(tempfile.mkdtemp())
+    input_path = tmp_dir / f"recording_{job_id}.webm"
+    input_path.write_bytes(video_bytes)
+
+    try:
+        # ── 1. Extract 1 frame every 4 seconds, max 12 frames ─────────────────
+        frames_dir = tmp_dir / "frames"
+        frames_dir.mkdir()
+        extract_cmd = (
+            f'"{FFMPEG_BIN}" -i "{input_path}" -vf fps=1/4 -vframes 12 '
+            f'"{frames_dir / "frame_%03d.jpg"}" -y'
+        )
+        loop = asyncio.get_event_loop()
+        extract_result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(extract_cmd, shell=True, capture_output=True, text=True, timeout=60),
+        )
+        frame_files = sorted(frames_dir.glob("frame_*.jpg"))
+        if not frame_files:
+            raise HTTPException(status_code=422, detail="Could not extract frames — is the recording a valid screen capture?")
+
+        # ── 2. Gemini Vision: one narration sentence per frame ─────────────────
+        import base64
+        narration_sentences: List[str] = []
+        product_ctx = f" of {product_name}" if product_name else ""
+        for frame_path in frame_files:
+            frame_b64 = base64.b64encode(frame_path.read_bytes()).decode()
+            frame_prompt = (
+                f"This is a screenshot from a product tutorial{product_ctx}. "
+                "Write exactly ONE sentence of tutorial narration describing what is visible. "
+                "Write as a presenter walking someone through the product — be specific. Max 15 words. "
+                "No quotes. Just the sentence."
+            )
+            try:
+                resp = await loop.run_in_executor(
+                    None,
+                    lambda p=frame_prompt, d=frame_b64: _gemini_client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=[{
+                            "parts": [
+                                {"text": p},
+                                {"inline_data": {"mime_type": "image/jpeg", "data": d}},
+                            ]
+                        }],
+                    ),
+                )
+                sentence = resp.text.strip().strip('"').rstrip(".")
+                if sentence:
+                    narration_sentences.append(sentence)
+            except Exception as _vis_err:
+                logger.warning(f"Gemini Vision frame failed (skipping): {_vis_err}")
+                narration_sentences.append(f"Here you can see the product{product_ctx} in action")
+
+        if not narration_sentences:
+            raise HTTPException(status_code=500, detail="Could not generate narration from frames.")
+
+        # ── 3. Edge TTS narration audio ────────────────────────────────────────
+        script = ". ".join(narration_sentences) + "."
+        audio_path = str(tmp_dir / f"narration_{job_id}.mp3")
+        await generate_tts_audio(script, audio_path)
+        if not Path(audio_path).exists():
+            audio_path = None
+
+        # ── 4. Assemble: frames as slides + Ken Burns + captions + music ───────
+        fmt_map = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
+        width, height = fmt_map.get(format, (1920, 1080))
+        total_duration = len(frame_files) * 4.0
+        output_path = str(OUTPUTS_DIR / f"tutorial_{job_id}.mp4")
+
+        ffmpeg_cmd = _build_slideshow_ffmpeg(
+            image_paths=[str(f) for f in frame_files],
+            sentences=narration_sentences,
+            color1=brand_color if re.match(r'^#[0-9a-fA-F]{6}$', brand_color) else "#6366f1",
+            width=width,
+            height=height,
+            total_duration=total_duration,
+            audio_path=audio_path,
+            output_path=output_path,
+        )
+        ffmpeg_result = await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(ffmpeg_cmd, shell=True, capture_output=True, text=True, timeout=180),
+        )
+        if ffmpeg_result.returncode != 0 or not Path(output_path).exists():
+            logger.error(f"Tutorial FFmpeg failed: {ffmpeg_result.stderr[-500:]}")
+            raise HTTPException(status_code=500, detail="Video assembly failed.")
+
+        # ── 5. Save record + increment usage ──────────────────────────────────
+        await increment_usage(user["id"], "videos")
+        try:
+            await db.videos.insert_one({
+                "_id": job_id,
+                "id": job_id,
+                "user_id": user["id"],
+                "url": f"/api/download/tutorial_{job_id}.mp4",
+                "format": format,
+                "duration": total_duration,
+                "engine": "tutorial_studio",
+                "frames": len(frame_files),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "type": "tutorial",
+            })
+        except Exception:
+            pass
+
+        return {
+            "url": f"/api/download/tutorial_{job_id}.mp4",
+            "job_id": job_id,
+            "frames": len(frame_files),
+            "duration": total_duration,
+            "script": ". ".join(narration_sentences),
+        }
+
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 from jarvis_router import router as jarvis_router  # noqa: E402
 from legal_router import legal_router  # noqa: E402
+from brand_router import brand_router  # noqa: E402
 
 app.include_router(api_router)
 app.include_router(auth_router)
@@ -3481,6 +4284,7 @@ app.include_router(billing_router)
 app.include_router(talking_router)
 app.include_router(jarvis_router)
 app.include_router(legal_router)
+app.include_router(brand_router)
 
 
 @app.on_event("shutdown")

@@ -37,8 +37,8 @@ AI-powered legal document generation with 2026 law context:
 | **Database** | MongoDB (Motor async driver) |
 | **AI / LLM** | Google Gemini 2.5 Flash (`google-genai` SDK) |
 | **TTS** | Microsoft Edge TTS — AndrewNeural (free, no API key) |
-| **Video** | FFmpeg + Pillow (CPU) → Modal A100 GPU for Pro tier |
-| **GPU** | Modal.com — LTX-Video (A100-40GB), SadTalker (A10G) |
+| **Video** | FFmpeg + Pillow (CPU) → Modal A10G GPU for paid tiers |
+| **GPU** | Modal.com — Wan 2.2 TI2V-5B (A10G), SadTalker (A10G) |
 | **Payments** | Stripe — subscriptions + one-time credit topups |
 | **Legal Search** | DuckDuckGo HTML (no API key, fetches latest law context) |
 | **Proxy** | Nginx (SSL + reverse proxy) |
@@ -52,7 +52,8 @@ AI-powered legal document generation with 2026 law context:
 - **URL Intelligence** — auto-extracts brand colors, headlines, features from any site
 - **Logo Creator** — 6 Pillow templates + Ideogram AI concepts; 1024×1024 PNG output
 - **Video Pipeline** — 6-slide design system, xfade transitions, Edge TTS, music bed, captions
-- **AI Videos (Pro)** — LTX-Video on Modal A100 serverless GPU
+- **AI Videos (Starter+)** — Wan 2.2 TI2V-5B on Modal A10G — animates real Hero slide ($0.03/clip)
+- **Tutorial Studio** — Chrome extension records product demo → AI narrates → polished YouTube tutorial
 - **Talking Head (Pro)** — SadTalker lip-sync; Stripe Identity verification + DeepFace gate
 - **Script Generator** — PAS, Step-by-Step, Before/After frameworks
 - **Poster Generator** — brand-matched social graphics
@@ -79,7 +80,7 @@ jobhuntpro_marketing/
 │   ├── server.py              # FastAPI backend (~2900 lines) — all core routes
 │   ├── legal_router.py        # Legal documents feature — profiles, chat, generate
 │   ├── jarvis_router.py       # JARVIS business intelligence endpoint
-│   ├── modal_video.py         # Modal LTX-Video serverless GPU app
+│   ├── modal_video.py         # Modal Wan 2.2 TI2V-5B serverless GPU app
 │   ├── modal_sadtalker.py     # Modal SadTalker talking head GPU app
 │   ├── requirements.txt       # Python dependencies
 │   ├── outputs/               # Generated videos & posters

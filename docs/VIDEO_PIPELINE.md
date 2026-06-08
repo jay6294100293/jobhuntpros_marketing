@@ -121,7 +121,11 @@ the character, energy, and angle of the script.
 
 ---
 
-## Planned: AI Video Engine (Phase 2)
+## Planned: AI Video Engine (Phase 2) — REVISED June 2026
+
+### DECISION: Wan 2.2 TI2V-5B replaces LTX-Video and SVD
+
+Full decision doc: `docs/WAN_VIDEO_UPGRADE.md`
 
 ### The Problem with Pure Text-to-Video
 Models like LTX-Video, CogVideoX, Runway generate cinematic atmosphere footage — but they cannot reliably embed a specific brand's logo or product UI. They hallucinate something logo-shaped but it won't be YOUR brand mark.
@@ -130,56 +134,96 @@ Models like LTX-Video, CogVideoX, Runway generate cinematic atmosphere footage �
 Instead of generating video from nothing, animate the EXISTING Pillow slides using AI motion:
 
 ```
-Pillow slide (PNG) → SVD/AI model → 3-4s animated clip
-                  → FFmpeg stitches all clips + Edge TTS audio → MP4
+Hero Pillow slide (PNG) → Wan 2.2 TI2V-5B → 1.3s animated branded clip
+                        → reversed clip = outro
+                        → Pexels B-roll for middle segments
+                        → FFmpeg stitches all + Edge TTS audio → MP4
 ```
 
-Result: cinematic-looking video that ACTUALLY shows the product's content, not generic AI footage.
+Result: the AI video clip literally shows the product's real brand colors, logo, and headline — not generic footage. This is what competitors charge $35–100/mo for.
 
-### Model Options
+### Chosen Model: Wan 2.2 TI2V-5B
 
-**Stable Video Diffusion (SVD-XT)** — recommended for Phase 2
-- Stability AI, Apache 2.0 (commercial OK)
-- Input: one image → output: 3-4 seconds smooth animated motion
-- Needs: A100 20GB VRAM
-- Proven in production by many apps
-- Makes still product slides "come alive" with natural camera motion
+**Why Wan 2.2 over everything else:**
 
-**CogVideoX-5B image-to-video mode** — higher quality alternative
-- Apache 2.0 (commercial OK)
-- Better motion quality than SVD
-- Needs: A100 80GB
-- More complex setup
+| | LTX-Video (old) | SVD-XT (considered) | Wan 2.2 TI2V-5B (chosen) |
+|---|---|---|---|
+| Input | Text only | Image only | Text + Image ✅ |
+| Shows brand content | ❌ Generic footage | ✅ Animates slide | ✅ Animates slide + reads prompt |
+| GPU required | A100 40GB | A100 20GB | A10G 24GB ✅ |
+| Cost per clip | ~$0.44 | ~$0.25 | ~$0.03 ✅ |
+| Model size | 12GB | 10GB | 10GB FP8 ✅ |
+| License | Apache 2.0 | Apache 2.0 | Apache 2.0 ✅ |
 
-**Runway Gen-3 image-to-video** — zero GPU management
-- Commercial API, ~$0.05/second of video
-- No Modal needed, just API key
-- Best quality, most reliable
-- Pay per video (no GPU overhead)
+Wan 2.2 wins on all three dimensions: quality (shows real brand), cost (14× cheaper), GPU (smaller = cheaper Modal tier).
 
-### Infrastructure: Modal.com
+**What it does for our pipeline:**
+- Input: Hero Pillow slide PNG + text prompt ("cinematic product intro, brand colors {color}, professional")
+- Output: 33-frame (1.3s) cinematic clip of the ACTUAL branded slide animating
+- That clip plays as intro. Reversed, it plays as outro. One generation, two uses.
+- Cost: ~$0.03 vs $0.44 for LTX-Video
+
+### Infrastructure: Modal.com (unchanged)
 - Serverless GPU cloud — functions spin up on demand, shut down automatically
-- Pay only for seconds of compute (~$0.20-0.40 per video on A100)
-- Zero server management vs Vast.ai (which needs SSH + manual management)
-- Code already exists in `backend/modal_video.py`
+- Pay only for seconds of compute (~$0.03 per clip on A10G)
+- Zero server management
+- Code: `backend/modal_video.py` — REWRITE for Wan 2.2
+- New APP_NAME: `launchbusiness-wan-video` (fixes existing APP_NAME mismatch bug)
 - Needs: MODAL_TOKEN_ID + MODAL_TOKEN_SECRET in `/root/secrets/swiftpack.env`
 
-### Phase 2 Tier Upgrade Plan
+### Phase 2 Tier Plan (updated)
 
-| Plan | Creative Direction | Video Engine |
-|---|---|---|
-| Free | Locked | FFmpeg slideshow |
-| Starter | ✅ Better script | FFmpeg slideshow |
-| Pro | ✅ Better script | SVD animated slides (Modal A100) |
-| Agency | ✅ Better script + scene hints | SVD animated slides (Modal A100) |
+At $0.03/clip, AI video is affordable for ALL paid tiers — no need to gate it to Pro/Agency.
 
-### Credit Cost (Phase 2)
-- Creative Direction on Pro: +5 credits (triggers Modal GPU)
-- Creative Direction on Agency: +10 credits (full scene generation)
+| Plan | Video Engine |
+|---|---|
+| Free | FFmpeg slideshow (no GPU) |
+| Starter | Wan 2.2 animated branded intro/outro + Pexels B-roll (if PEXELS_API_KEY set) |
+| Pro | Same as Starter + Talking Head |
+| Agency | Same as Pro + unlimited brand profiles |
+
+### No Extra Credit Cost for Phase 2
+GPU cost at $0.03/clip means it costs less than 1 cent extra per video vs the old FFmpeg-only pipeline.
+No need to charge extra credits. AI video is included in the normal video credit.
 
 ---
 
-## Phase 3: Custom Scene Generation (Future)
+## Phase 3: Tutorial Studio — Chrome Extension (Planned)
+
+Full spec: `docs/TUTORIAL_STUDIO.md`
+
+Tutorial Studio adds a fourth type of video output: a real product walkthrough tutorial generated from a screen recording.
+
+**The problem it solves:** The existing Magic Button generates slideshow-style ad videos from a scraped URL. Those are great for ads. But YouTube tutorials need to show the product ACTUALLY WORKING — the real dashboard, real buttons, real user flow. You can't generate that from scraped data.
+
+**The solution:** A Chrome extension that records the founder's browser tab (already logged in, real product visible), uploads the recording, and our server auto-generates a polished 16:9 YouTube tutorial.
+
+```
+Chrome extension records active browser tab (founder logged into product)
+        ↓
+WebM video uploads to POST /api/tutorial/process
+        ↓
+FFmpeg extracts 1 frame every 4 seconds (max 12 frames)
+        ↓
+Each frame → Gemini Vision → 1 narration sentence
+        ↓
+Edge TTS voices the narration
+        ↓
+_build_slideshow_ffmpeg: frames as slides + captions + music + CTA
+        ↓
+16:9 MP4 YouTube tutorial ready for download
+```
+
+**Why extension, not server-side automation:**
+- Server-side Playwright cannot get past login walls (real products require auth)
+- VPS has 1GB RAM — Chromium alone would OOM the server
+- Extension runs on founder's machine = already logged in, zero RAM cost for us
+
+**Tier:** Starter+ only. Counts as 1 video credit per tutorial.
+
+---
+
+## Phase 4: Custom Scene Generation (Future)
 
 For Agency users who write creative directions like "logo coming out of the sun":
 
@@ -221,7 +265,12 @@ FFmpeg composites the logo on top. This is how Runway, HeyGen, and professional 
 | Date | Decision | Reason |
 |---|---|---|
 | June 2026 | Remove LTX-Video from landing page Pro claim | LTX-Video not deployed, misleading to paying users |
-| June 2026 | Image-to-video (SVD) preferred over text-to-video for Pro | Shows actual product content, not generic AI footage |
+| June 2026 | Image-to-video preferred over text-to-video | Shows actual product content, not generic AI footage |
 | June 2026 | Modal for GPU, not Vast.ai | Serverless = zero management, pay per second |
 | June 2026 | Phase 1 = better script only (no GPU) | Ships value fast, no GPU dependency |
 | June 2026 | Creative direction: Starter+ only | Incentivizes upgrade from Free |
+| June 2026 | **Replace LTX-Video with Wan 2.2 TI2V-5B** | 14× cost reduction ($0.44→$0.03) + accepts image input so shows actual brand |
+| June 2026 | **Use A10G not A100 for Wan 2.2** | 5B FP8 model fits in 24GB A10G; no need for A100 40GB |
+| June 2026 | **Fix APP_NAME mismatch with Wan 2.2 upgrade** | `swiftpack-ltx-video` never matched `launchbusiness-ltx-video` default — silent failure |
+| June 2026 | **Give AI video to all paid tiers (not just Pro)** | At $0.03/clip, margin is ~98% even on Starter — no reason to gate it |
+| June 2026 | **Tutorial Studio = Chrome extension, not server automation** | Server can't log into products; extension is already logged in; VPS can't run Chromium (1GB RAM) |

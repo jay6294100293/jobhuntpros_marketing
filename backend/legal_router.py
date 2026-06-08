@@ -413,9 +413,13 @@ async def send_chat_message(profile_id: str, body: ChatMessageRequest, user=Depe
     }
 
 
+class StartChatRequest(BaseModel):
+    brand_profile_id: Optional[str] = None  # optional — pre-fills intake from brand profile
+
+
 @legal_router.post("/chat/{profile_id}/start")
-async def start_chat(profile_id: str, user=Depends(_auth)):
-    """Send an initial greeting message from the AI to kick off the intake."""
+async def start_chat(profile_id: str, body: StartChatRequest = None, user=Depends(_auth)):
+    """Send an initial greeting + optional brand-profile pre-fill to kick off the intake."""
     from server import db
 
     tier = user.get("tier", "free")
@@ -431,14 +435,41 @@ async def start_chat(profile_id: str, user=Depends(_auth)):
     if existing > 0:
         raise HTTPException(status_code=400, detail="Chat already started for this profile.")
 
-    greeting = (
-        f"Hi! I'm here to help generate the legal documents for **{profile['name']}**. "
-        "This should only take a few minutes.\n\n"
-        "Let's start with the basics:\n\n"
-        "1. **What does your business do?** Give me a 1-2 sentence description.\n"
-        "2. **What's the business structure?** (sole proprietor, LLC, corporation, partnership)\n"
-        "3. **Where is the business registered/operating?** Country and province/state if applicable."
-    )
+    # Try to pre-fill from a brand profile to skip known questions
+    prefill_lines = []
+    if body and body.brand_profile_id:
+        try:
+            bp = await db.brand_profiles.find_one(
+                {"id": body.brand_profile_id, "user_id": user["id"]}, {"_id": 0}
+            )
+            if bp:
+                if bp.get("business_type"):   prefill_lines.append(f"- Business type: **{bp['business_type']}**")
+                if bp.get("jurisdiction"):     prefill_lines.append(f"- Jurisdiction: **{bp['jurisdiction']}**")
+                if bp.get("revenue_model"):    prefill_lines.append(f"- Revenue model: **{bp['revenue_model']}**")
+                if bp.get("data_practices"):   prefill_lines.append(f"- Data practices: {bp['data_practices']}")
+                if bp.get("audience"):         prefill_lines.append(f"- Target audience: {bp['audience']}")
+        except Exception:
+            pass
+
+    if prefill_lines:
+        greeting = (
+            f"Hi! I'm here to help generate the legal documents for **{profile['name']}**.\n\n"
+            "I've loaded your brand profile — here's what I already know:\n\n"
+            + "\n".join(prefill_lines)
+            + "\n\nI just need a few more details:\n\n"
+            "1. **What exactly does the business do?** Give me a 1-2 sentence description.\n"
+            "2. **What's the legal business structure?** (sole proprietor, LLC, corporation, partnership)\n"
+            "3. **Any specific concerns or document requirements** I should know about?"
+        )
+    else:
+        greeting = (
+            f"Hi! I'm here to help generate the legal documents for **{profile['name']}**. "
+            "This should only take a few minutes.\n\n"
+            "Let's start with the basics:\n\n"
+            "1. **What does your business do?** Give me a 1-2 sentence description.\n"
+            "2. **What's the business structure?** (sole proprietor, LLC, corporation, partnership)\n"
+            "3. **Where is the business registered/operating?** Country and province/state if applicable."
+        )
 
     msg = {
         "id": str(uuid.uuid4()),

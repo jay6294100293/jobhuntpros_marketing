@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tutorial Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      min-height: 200px;
+      background: #09090b;
+      color: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid #27272a;
+      background: #18181b;
+    }
+
+    .logo {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+
+    .header-text h1 { font-size: 13px; font-weight: 700; color: #fafafa; }
+    .header-text p  { font-size: 11px; color: #71717a; }
+
+    .section { padding: 16px; }
+
+    /* ── Login view ── */
+    #login-view label {
+      display: block;
+      font-size: 11px;
+      color: #a1a1aa;
+      margin-bottom: 4px;
+      margin-top: 10px;
+    }
+    #login-view label:first-of-type { margin-top: 0; }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      color: #fafafa;
+      font-size: 12px;
+      outline: none;
+    }
+    input:focus { border-color: #6366f1; }
+
+    /* ── Buttons ── */
+    button {
+      width: 100%;
+      padding: 9px 12px;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:not(:disabled):hover { opacity: 0.88; }
+
+    .btn-primary   { background: #6366f1; color: white; margin-top: 14px; }
+    .btn-record    { background: #16a34a; color: white; }
+    .btn-stop      { background: #dc2626; color: white; }
+    .btn-upload    { background: #6366f1; color: white; }
+    .btn-secondary { background: #27272a; color: #a1a1aa; margin-top: 8px; }
+
+    /* ── Status ── */
+    .status {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .status.idle    { background: #18181b; color: #71717a; border: 1px solid #27272a; }
+    .status.recording { background: #1c1917; color: #fca5a5; border: 1px solid #7f1d1d; }
+    .status.uploading { background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81; }
+    .status.done    { background: #052e16; color: #86efac; border: 1px solid #14532d; }
+    .status.error   { background: #1c0505; color: #fca5a5; border: 1px solid #7f1d1d; }
+
+    .timer {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      color: #f87171;
+      margin: 10px 0 6px;
+      letter-spacing: 2px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: #27272a;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #6366f1;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    .result-link {
+      display: block;
+      text-align: center;
+      color: #818cf8;
+      font-size: 12px;
+      text-decoration: none;
+      margin-top: 8px;
+    }
+    .result-link:hover { text-decoration: underline; }
+
+    .divider {
+      height: 1px;
+      background: #27272a;
+      margin: 4px 0 10px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .user-email { font-size: 11px; color: #71717a; }
+    .logout-btn {
+      width: auto;
+      padding: 3px 8px;
+      font-size: 11px;
+      background: transparent;
+      color: #71717a;
+      border: 1px solid #3f3f46;
+      border-radius: 4px;
+    }
+
+    .settings-row {
+      margin-bottom: 10px;
+    }
+    .settings-row label {
+      display: block;
+      font-size: 11px;
+      color: #a1a1aa;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">✦</div>
+  <div class="header-text">
+    <h1>Tutorial Studio</h1>
+    <p>LaunchBusiness AI</p>
+  </div>
+</div>
+
+<!-- ── LOGIN VIEW ── -->
+<div id="login-view" class="section" style="display:none">
+  <p style="color:#a1a1aa; font-size:12px; margin-bottom:12px;">
+    Sign in with your LaunchBusiness AI account.
+  </p>
+  <div class="settings-row">
+    <label>Server URL</label>
+    <input type="text" id="server-url" value="https://launchbusinessai.com" />
+  </div>
+  <label>Email</label>
+  <input type="email" id="login-email" placeholder="you@example.com" />
+  <label>Password</label>
+  <input type="password" id="login-password" placeholder="••••••••" />
+  <button class="btn-primary" id="login-btn">Connect Account</button>
+  <div class="status idle" id="login-status" style="display:none"></div>
+</div>
+
+<!-- ── RECORD VIEW ── -->
+<div id="record-view" class="section" style="display:none">
+  <div class="user-info">
+    <span class="user-email" id="user-email-display"></span>
+    <button class="logout-btn" id="logout-btn">Sign out</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="settings-row">
+    <label>Product name (optional)</label>
+    <input type="text" id="product-name" placeholder="e.g. FitnessGuru AI" />
+  </div>
+
+  <!-- Idle state -->
+  <div id="idle-state">
+    <button class="btn-record" id="record-btn">⏺ Start Recording</button>
+    <div class="status idle" style="margin-top:10px">
+      Navigate to your product dashboard, then click Start Recording.<br>
+      Record for 30–90 seconds. Max 12 frames captured.
+    </div>
+  </div>
+
+  <!-- Recording state -->
+  <div id="recording-state" style="display:none">
+    <div class="timer" id="timer-display">0:00</div>
+    <button class="btn-stop" id="stop-btn">⏹ Stop Recording</button>
+    <div class="status recording">Recording active — demo your product now.</div>
+  </div>
+
+  <!-- Uploading state -->
+  <div id="uploading-state" style="display:none">
+    <div class="status uploading" id="upload-status">Uploading recording…</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+
+  <!-- Done state -->
+  <div id="done-state" style="display:none">
+    <div class="status done">✅ Tutorial video ready!</div>
+    <a class="result-link" id="result-link" href="#" target="_blank">Open in LaunchBusiness AI →</a>
+    <button class="btn-secondary" id="download-btn">↓ Download MP4</button>
+    <button class="btn-record" id="new-recording-btn" style="margin-top:8px">⏺ Record Another</button>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-state" style="display:none">
+    <div class="status error" id="error-msg"></div>
+    <button class="btn-secondary" id="retry-btn" style="margin-top:10px">Try Again</button>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

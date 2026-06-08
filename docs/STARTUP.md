@@ -1,80 +1,76 @@
-﻿# SWIFTPACK AI — STARTUP GUIDE
-# Product: SwiftPack AI | Domain: swiftpackai.tech
+# LAUNCHBUSINESS AI — STARTUP GUIDE
+# Product: LaunchBusiness AI | Domain: launchbusinessai.com
 # Company: NovaJay Tech (novajaytech.com) | Entity: FM1032559
-# Last updated: 2026-04-08
+# Last updated: 2026-06-08
 
 ---
 
 ## WHAT THIS DOCUMENT IS
 
-This is your complete guide for taking SwiftPack AI from its current state to a live,
-paying product. It covers what every document in this project does, the correct order
-to implement things, legal requirements, deployment steps, and how to get your first users.
+Complete guide for new sessions: what each file does, deployment steps, credential
+order, legal requirements, and how to get first users.
 
 ---
 
-## PART 1 — WHAT SWIFTPACK AI IS
+## PART 1 — WHAT LAUNCHBUSINESS AI IS
 
-SwiftPack AI takes any website URL and produces a complete marketing launch pack in
-30 seconds. The output is 2 videos, 2 scripts, and 2 posters — ready to publish.
+LaunchBusiness AI is a two-pillar platform for founders:
 
-The core feature is the Magic Button. One click triggers the entire pipeline:
-URL is scraped for brand colors and headlines, Google Gemini writes the scripts,
-Google Cloud TTS generates the voiceover, and MoviePy assembles the videos with
-animated captions, zoom effects, and progress bars. Output formats cover
-TikTok (9:16), YouTube (16:9), and Instagram (1:1).
+**Pillar 1 — Marketing Launch Pack**
+Paste any product URL. Get a complete marketing pack in 90 seconds:
+- 4 videos (9:16 TikTok, 16:9 YouTube, 1:1 Instagram, 4:5 Facebook)
+- 3 AI scripts (PAS, Step-by-Step, Before/After)
+- 2 branded posters (1:1 and 9:16)
+- Logo (6 templates + Ideogram AI concepts)
+- GPU AI video for paid tiers: Wan 2.2 TI2V-5B animates your actual Hero slide
 
-Target users: Founders, solo marketers, agencies, and anyone who needs professional
-marketing content without hiring a video editor or copywriter.
+**Pillar 2 — Legal Documents**
+AI-powered legal document generation:
+- 28 document types (Privacy Policy, NDA, Employment Contract, Shareholder Agreement, etc.)
+- Adaptive intake chat via Gemini — gathers your business profile
+- Jurisdiction-aware (Canada, USA, EU)
+- 2026 law context via live DuckDuckGo search
+- Credit-based billing via Stripe
 
-The traditional alternative costs $400 to $1,900 and takes 5 to 10 days.
-SwiftPack AI costs nothing beyond hosting and takes 30 seconds.
-
-Current state: Code is 100% complete. No features are missing.
-The only thing blocking launch is credentials and a server.
+Target users: Founders, solo marketers, agencies replacing a $400-$1,900/5-day agency workflow.
 
 ---
 
 ## PART 2 — DOCUMENTS IN THIS PROJECT
 
-### Documents you read regularly
+### Documents to read every session
 
 | Document | What it is |
 |----------|-----------|
-| PROJECT_SUMMARY.md | Complete feature list, tech stack, cost breakdown. Read this before any session. |
-| VIDEO_FEATURES.md | Full specification of the video generation pipeline. Read before any video work. |
-| CLAUDE.md | Auto-loaded by Claude Code. Contains all rules and priorities for this project. |
+| `docs/PROJECT_SUMMARY.md` | Complete feature list, tech stack, deploy commands |
+| `docs/VIDEO_FEATURES.md` | Full video pipeline spec — read before any video work |
+| `docs/WAN_VIDEO_UPGRADE.md` | Wan 2.2 decision doc — read before any modal_video.py work |
+| `docs/TUTORIAL_STUDIO.md` | Chrome extension + Tutorial Studio spec |
+| `CLAUDE.md` | Auto-loaded rules — hard constraints, priority order, NEVER DO list |
 
-### Documents you use before Claude Code sessions
-
-| Document | What it is |
-|----------|-----------|
-| SESSION_PROMPT.md | Paste this at the start of every Claude Code task. |
-| AUDIT_PROMPT.md | Paste this to run a full audit of the codebase against the master documents. |
-| AUDIT_FIX_PROMPT.md | Paste this after an audit to fix issues by priority tier. |
-
-### Documents you use for business setup
+### Documents for new Claude Code sessions
 
 | Document | What it is |
 |----------|-----------|
-| CREDENTIALS_SETUP.md | Complete list of every credential needed with exact steps. |
-| BRAND.md | SwiftPack AI brand colors, tone, logo requirements, and Ideogram prompt. |
+| `docs/SESSION_PROMPT.md` | Paste at the start of every Claude Code task |
+| `docs/AUDIT_PROMPT.md` | Full codebase audit against master docs |
+| `docs/AUDIT_FIX_PROMPT.md` | Fix audit issues by priority tier |
+
+### Business setup documents
+
+| Document | What it is |
+|----------|-----------|
+| `docs/CREDENTIALS_SETUP.md` | Every credential needed + exact setup steps |
+| `docs/BRAND.md` | Brand colors, tone, logo requirements |
+| `docs/PRODUCT_STRATEGY.md` | Business model, pricing, roadmap |
 
 ### Supporting technical documents
 
 | Document | What it is |
 |----------|-----------|
-| README.md | Public-facing overview of the product. |
-| SETUP_INSTRUCTIONS.md | Step-by-step deployment guide. |
-| TTS_SETUP.md | Detailed setup guide for Google Cloud Text-to-Speech. |
-| design_guidelines.json | Design tokens used by the frontend components. |
-
-### Documents you do not need to read
-
-| Document | Why |
-|----------|-----|
-| archive/ folder | Old audit reports and redundant credential files. Not active. |
-| memory/ folder | Auto-generated by the Emergent platform. Not relevant to development. |
+| `README.md` | Public-facing overview |
+| `docs/SETUP_INSTRUCTIONS.md` | Step-by-step deployment guide |
+| `docs/BRAND_PROFILE_FEATURE.md` | Brand Profile feature — all 15 items DONE |
 
 ---
 
@@ -90,225 +86,174 @@ and receive income from software products I have built?"
 Record the date, agent name, and their response. Keep this permanently.
 
 ### Business Registration
-SwiftPack AI operates under FM1032559 as a trade name of NovaJay Tech.
+LaunchBusiness AI operates under FM1032559 as a trade name of NovaJay Tech.
 No separate registration is needed.
 
 ### Privacy Policy and Terms of Service
-SwiftPack AI does not currently have a Privacy Policy or Terms of Service page.
-These must be added before launch.
-
-What to cover in the Privacy Policy:
-- You collect email addresses if users register
-- You process URLs that users provide
-- You do not store the websites you scrape — processing is temporary
-- You use Google Gemini API for content generation (data goes to Google)
-- You use Google Cloud TTS for voiceover (data goes to Google)
-
-Use a free generator at privacypolicygenerator.info and customize it.
-Add two simple pages to the React frontend: /privacy and /terms.
-Users should see links to both in the footer.
+Already built into the product. Review the /privacy and /terms pages before launch
+to make sure all AI providers (Gemini, Edge TTS, Modal) are mentioned.
 
 ### GST Registration
 Not required until you earn $30,000 CAD in a year.
 
 ### Insurance
 Your Zensurance E&O and Cyber Liability policy covers all NovaJay Tech products
-including SwiftPack AI under one policy.
+including LaunchBusiness AI under one policy.
 
 ---
 
 ## PART 4 — CREDENTIALS (complete in this order)
 
-All steps are documented in detail in CREDENTIALS_SETUP.md.
+All steps documented in `docs/CREDENTIALS_SETUP.md`.
 
-### Minimum required to launch (3 things only)
-SwiftPack AI has the simplest credential requirements of all your products.
-You only need 3 things to go live:
+### Minimum required to run the full product
 
-1. MONGO_URL — MongoDB Atlas free cluster connection string
-2. GEMINI_API_KEY — Google AI Studio key (swiftpackai.dev@gmail.com)
-3. gcloud-tts-key.json — Google Cloud TTS service account JSON file
+1. `MONGODB_URL` — MongoDB Atlas free cluster connection string
+2. `GEMINI_API_KEY` — Google AI Studio key (for scripts, poster AI, Tutorial narration)
+3. `JWT_SECRET` — any 32+ char random string
+4. `STRIPE_SECRET_KEY` + webhook secret + 3 price IDs — for subscriptions
 
-Everything else (OpenRouter fallback, Stripe, Brevo) can be added after launch.
+### For GPU video (Pro/Agency tiers)
 
-### Full credential order
-1. Create swiftpackai.dev@gmail.com
-2. Create MongoDB Atlas free cluster — copy connection string
-3. Get Gemini API key from aistudio.google.com
-4. Create Google Cloud project — enable Text-to-Speech API — download JSON key
-5. Get OpenRouter API key (fallback for when Gemini is down)
-6. Update backend/.env with all values
-7. Drop gcloud-tts-key.json into the backend/ folder
+5. `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET` — Modal.com account
+6. Deploy: `modal deploy backend/modal_video.py`
+7. Add to secrets: `MODAL_APP_NAME=launchbusiness-wan-video`
 
----
+### Optional (activate features)
 
-## PART 5 — REMAINING CODE TO BUILD
+8. `PEXELS_API_KEY` — free at pexels.com/api — enables B-roll in video pipeline
+9. `BREVO_API_KEY` — transactional email (password reset, etc.)
+10. `OPENROUTER_API_KEY` — Gemini fallback during outages
 
-SwiftPack AI code is complete. However, two improvements are recommended
-before or shortly after launch. Both can be done in Claude Code sessions.
-
-### Improvement 1 — Add AI fallback chain (before launch)
-Currently, if Gemini API fails, script generation fails entirely.
-Add a fallback chain in backend/server.py:
-- Primary: Gemini 2.5 Flash
-- Fallback: OpenRouter
-- Emergency: Template-based script that works without any AI
-
-This makes the product reliable even during API outages.
-Paste SESSION_PROMPT.md + this task into Claude Code to implement it.
-
-### Improvement 2 — Add Privacy Policy and Terms pages (before launch)
-Add two simple React pages to the frontend.
-Paste SESSION_PROMPT.md + this task into Claude Code to implement them.
-
-### Improvement 3 — Upgrade URL scraper to Crawlee (after launch)
-The current BeautifulSoup scraper fails on JavaScript-heavy websites.
-Crawlee is a Python library that handles those sites properly.
-Install with: pip install crawlee[beautifulsoup]
-This is a background improvement — not blocking launch.
+Edge TTS (AndrewNeural voice) requires **no API key** — it's free and already working.
 
 ---
 
-## PART 6 — DEPLOYMENT (step by step)
+## PART 5 — DEPLOYMENT (step by step)
 
-SwiftPack AI uses Docker Compose. The deployment is straightforward.
+LaunchBusiness AI uses Docker Compose on a Contabo VPS.
 
 ### Step 1 — Server
-Create a Contabo account (contabo.com) using swiftpackai.dev@gmail.com.
-Add RBC Business Mastercard for billing.
-Create a new server:
-- Type: CX32 (4 vCPU, 8 GB RAM) — video processing needs RAM
-- OS: Ubuntu 22.04
-- Location: your nearest region
-- Add your SSH public key
+Contabo VPS (existing server at root@YOUR_SERVER_IP).
+SSH key: `novajaytechserver_testing-key.pem` in ~/Downloads.
 
-### Step 2 — Server setup
-SSH into the server and run:
+### Step 2 — Upload code
+```bash
+git pull   # on the server inside /root/swiftpack
 ```
-apt update && apt upgrade -y
-apt install docker.io docker-compose nginx certbot python3-certbot-nginx ffmpeg -y
+Or from local:
+```bash
+scp -i ~/Downloads/novajaytechserver_testing-key.pem -r . root@YOUR_SERVER_IP:/root/swiftpack
 ```
-FFmpeg must be installed on the host — it is required for video generation.
 
-### Step 3 — Upload code
+### Step 3 — Configure secrets
+```bash
+nano /root/secrets/swiftpack.env
 ```
-git clone your-repo-url /opt/swiftpackai
-cd /opt/swiftpackai
-```
-Or use scp to upload from your Windows machine.
+Required vars: MONGODB_URL, GEMINI_API_KEY, JWT_SECRET, STRIPE_SECRET_KEY,
+STRIPE_WEBHOOK_SECRET, STRIPE_STARTER_PRICE_ID, STRIPE_PRO_PRICE_ID, STRIPE_AGENCY_PRICE_ID,
+MODAL_TOKEN_ID, MODAL_TOKEN_SECRET, MODAL_APP_NAME=launchbusiness-wan-video
 
-### Step 4 — Configure environment
-Copy your filled-in backend/.env to the server.
-Copy gcloud-tts-key.json to the backend/ folder on the server.
+### Step 4 — Build and start
+```bash
+cd /root/swiftpack
+docker compose build backend && docker compose up -d
+docker restart swiftpack-nginx-1
+```
 
-### Step 5 — Start the application
-```
-docker-compose up -d
-```
-Verify it is running:
-```
+### Step 5 — Verify
+```bash
 curl http://localhost:8001/api/
+# Returns: {"message": "LaunchBusiness AI API"}
+
+docker logs swiftpack-backend-1 --tail=50
 ```
-Should return: {"message": "JobHuntPro Content Studio API"}
 
-### Step 6 — Configure Nginx and SSL
-Create Nginx config pointing swiftpackai.tech to port 8001 for the backend
-and port 3000 for the frontend.
-Run certbot to get a free SSL certificate for swiftpackai.tech.
+### Step 6 — Deploy Wan 2.2 to Modal (first time only)
+```bash
+docker exec swiftpack-backend-1 modal deploy /app/backend/modal_video.py
+```
 
-### Step 7 — Point domain
-In Cloudflare, add an A record pointing swiftpackai.tech to your Contabo VPS IP.
-
-### Step 8 — Test end to end
-Go to https://swiftpackai.tech
-Paste your own product URL (or novajaytech.com) into the Magic Button.
-Verify: 2 videos + 2 scripts + 2 posters are generated and downloadable.
+### Step 7 — Test end to end
+Go to https://launchbusinessai.com
+Paste your own URL into the Magic Button.
+Expected: 4 videos + 3 scripts + 2 posters generated and downloadable.
 
 ---
 
-## PART 7 — FIRST USERS
+## PART 6 — FIRST USERS
 
-### Who to target first
+### Who to target
 Founders and solo marketers who create content regularly but have no team.
-The message is simple: what used to cost $400-1900 and 5-10 days now takes 30 seconds
-and costs nothing.
+Message: "What used to cost $400-1,900 and 5-10 days now takes 90 seconds."
 
 ### Where to find them
 
-Reddit:
-- r/SaaS — post your launch story with a before/after example
-- r/entrepreneur — share how you built it and what it does
+**Reddit:**
+- r/SaaS — launch story with before/after example
+- r/entrepreneur — how you built it and what it does
 - r/startups — same approach
 
-Indie Hackers (indiehackers.com):
+**Indie Hackers (indiehackers.com):**
 - Write a launch post explaining the product and the build process
-- This community specifically values founder-built tools
 
-ProductHunt:
+**ProductHunt:**
 - Launch after you have 5 real testimonials
-- Prepare a good GIF or short video showing the Magic Button in action
-- Use SwiftPack AI itself to create the launch video
+- Use LaunchBusiness AI itself to create the launch video
 
-LinkedIn:
-- Record a 60-second screen recording of the Magic Button working
-- Post it with a clear caption: "I built a tool that turns any website URL into
-  a complete video launch pack in 30 seconds. Here is what it produced for my own site."
+**LinkedIn:**
+- Record a 90-second screen recording of the Magic Button working
+- Post: "I built a tool that turns any website URL into a complete 4-format
+  marketing pack in 90 seconds. Here is what it produced for my own site."
 
 ### What to offer first users
 First 20 users: One month of Pro tier free in exchange for feedback and a testimonial.
-You can also offer to make a free launch pack for their product to show them directly.
 
 ### The meta-marketing opportunity
-SwiftPack AI markets itself. Use it to create content for all your other products.
-Every video you publish for JobFlow AI, WealthLens AI, or FitCoach AI is also
-a demonstration of what SwiftPack AI can do.
+LaunchBusiness AI markets itself. Use it to create content for all your other products.
+Every video you publish for other NovaJay Tech products is a demo of this product.
 
 ---
 
-## PART 8 — WEEK BY WEEK PLAN
+## PART 7 — WEEK BY WEEK PLAN
 
-### This week (launch week)
-- Create swiftpackai.dev@gmail.com
-- Get Gemini API key and MongoDB Atlas connection string
-- Set up Google Cloud TTS — download JSON key
-- Fill in backend/.env completely
-- Create Contabo VPS — install Docker, Nginx, FFmpeg
-- Deploy with docker-compose up -d
-- Test Magic Button end to end
-- SwiftPack AI is LIVE
+### This week
+- Verify all secrets are set in /root/secrets/swiftpack.env
+- Deploy Wan 2.2: `modal deploy backend/modal_video.py`
+- Add PEXELS_API_KEY for B-roll (free at pexels.com/api)
+- Test Magic Button end to end on live server
+- Add Chrome Extension icons (16px, 48px, 128px PNG to extension/icons/)
+- Submit Chrome Extension to Chrome Web Store
 
 ### Next week
-- Add fallback chain (Gemini → OpenRouter → template)
-- Add Privacy Policy and Terms pages
 - Post launch announcement on Reddit and LinkedIn
-- Use SwiftPack AI to create a launch video for itself
+- Use LaunchBusiness AI to create a launch video for itself
 - Reach out to 10 potential users personally
 
 ### Week 3
 - Fix any issues from early user feedback
-- Apply for AWS Activate startup credits (need one live product — this is it)
-- Start building a simple pricing page (Free / Pro)
-- Add Stripe integration when pricing is decided
+- AppSumo lifetime deal prep (after first 5 testimonials)
+- Apply for AWS Activate startup credits
 
 ---
 
-## PART 9 — KEY RULES FOR THIS PROJECT
-
-These are the most important technical rules for anyone working on this codebase:
+## PART 8 — KEY RULES FOR THIS PROJECT
 
 - Video generation must always run in asyncio.run_in_executor — never block the event loop
 - API keys must always be read from environment variables — never hardcode them
 - The Magic Button pipeline must never be broken — test it after any change to server.py
-  The pipeline is: /api/scrape → /api/generate-script → /api/create-complete-video + /api/create-poster
-- Generated files are saved to backend/outputs/ — never to arbitrary paths
-- Temp audio files must be cleaned up after each video generation
-- The URL scraper only processes URLs that users provide — never scrape third-party sites automatically
-- All video generation uses async httpx for HTTP calls — never the synchronous requests library
+- Generated files are saved to `backend/outputs/` — never to arbitrary paths
+- Temp dirs must be cleaned up (shutil.rmtree) after video generation completes
+- The URL scraper only processes URLs that users provide — never automatic scraping
+- NEVER install Playwright/Chromium on VPS — Contabo has 1GB RAM, it will OOM
+- NEVER use the GTX 1080 Ti for SwiftPack — it runs Mother AI
+- NEVER reference LTX-Video — it is completely replaced by Wan 2.2 TI2V-5B
+- NEVER use APP_NAME "swiftpack-ltx-video" — correct name is "launchbusiness-wan-video"
+- Tutorial Studio recording runs on the user's Chrome extension, NEVER server-side
 
 ---
 
 ## REVENUE MILESTONE
 
-SwiftPack AI is your fastest path to revenue. It needs only credentials and a server.
 Target: First paying user within 2 weeks of launch.
 When NovaJay Tech reaches $2,000 CAD MRR across all products, begin incorporation.

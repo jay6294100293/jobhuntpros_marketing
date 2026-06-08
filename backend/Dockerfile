@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py .
 
+# Bundled fonts (Poppins + Inter) — committed to git, no runtime download needed
+COPY assets/ assets/
+
 # Create output/upload dirs
 RUN mkdir -p outputs uploads
 
