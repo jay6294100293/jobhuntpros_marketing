@@ -207,7 +207,7 @@ export const TutorialStudio = () => {
             <div>
               <p className="font-semibold text-zinc-100 text-sm">Processing your tutorial…</p>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Extracting frames → Gemini narrates each screen → Edge TTS voices it → FFmpeg assembles the video
+                Extracting frames → AI narrates each screen → neural voice added → assembling your tutorial video
               </p>
             </div>
           </div>
@@ -303,7 +303,7 @@ export const TutorialStudio = () => {
             <strong className="text-zinc-400">How the AI narration works:</strong> Your recording is
             split into one screenshot every 4 seconds (max 12 frames). Gemini Vision looks at each
             screenshot and writes one tutorial sentence describing what's visible — like a real presenter.
-            Edge TTS voices the narration, and FFmpeg assembles it into a polished 16:9 YouTube video
+            A neural voice reads the narration aloud, and the video is assembled into a polished 16:9 YouTube video
             with captions, music, and a branded progress bar.
           </p>
         </div>

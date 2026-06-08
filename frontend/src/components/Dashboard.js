@@ -418,9 +418,9 @@ export const Dashboard = () => {
                   Videos — All Formats
                 </h3>
                 <p className="text-xs text-zinc-500 mb-4">
-                  {results.ad_video?.engine === 'hybrid-pexels-ltx' && 'Pexels B-roll + Wan 2.2 cinematic intro/outro + product overlay · '}
-                  {results.ad_video?.engine === 'pexels' && 'Pexels B-roll + product overlay · '}
-                  Poppins font · Word-chunk captions · Neural voiceover
+                  {results.ad_video?.engine === 'hybrid-pexels-ltx' && 'Real footage + cinematic branded intro/outro · '}
+                  {results.ad_video?.engine === 'pexels' && 'Real footage + product overlay · '}
+                  Branded typography · animated captions · neural voiceover
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[

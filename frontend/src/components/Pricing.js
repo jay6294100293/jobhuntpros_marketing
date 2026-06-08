@@ -51,7 +51,7 @@ const plans = [
       '50 videos per month',
       '200 scripts per month',
       '200 posters per month',
-      'AI-generated video (Wan 2.2 on Modal A10G)',
+      'GPU-accelerated cinematic AI video',
       'Talking head feature',
       'Priority rendering queue',
     ],
