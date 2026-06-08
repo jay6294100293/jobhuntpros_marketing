@@ -92,6 +92,18 @@ export const Dashboard = () => {
       return;
     }
 
+    // Client-side URL sanity check before hitting the server
+    try {
+      const parsed = new URL(url.trim());
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        toast.error('Please enter a valid website URL (starting with http:// or https://)');
+        return;
+      }
+    } catch {
+      toast.error('Please enter a valid website URL');
+      return;
+    }
+
     const hasCreative = canUseCreative && creativeDirection.trim().length > 0;
     setUsedCreative(hasCreative);
     setLoading(true);

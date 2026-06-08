@@ -279,9 +279,39 @@ async def increment_usage(user_id: str, content_type: str):
     )
 
 
+# ── URL safety constants ───────────────────────────────────────────────────────
+
+_URL_MAX_LENGTH = 2048
+
+# Substrings that must not appear anywhere in the hostname.
+# Catches obvious adult/malicious domains without relying on an external API.
+_BLOCKED_HOST_FRAGMENTS: frozenset = frozenset([
+    # Adult content platforms
+    "porn", "xxx", "sex", "nude", "naked", "erotic", "hentai",
+    "xvideo", "xhamster", "xnxx", "youporn", "pornhub", "redtube",
+    "chaturbate", "onlyfans", "brazzers", "cam4", "camgirl",
+    "livejasmin", "stripchat", "bongacams",
+    # Malware / phishing keywords sometimes baked into hostnames
+    "malware", "phishing", "trojan", "ransomware",
+])
+
+# Top-level domains that are either illegal to reach (Tor) or disproportionately
+# used for spam/malware with no legitimate SaaS use case.
+_BLOCKED_TLDS: frozenset = frozenset([".onion", ".su"])
+
+# Signals in scraped page title or meta-description that indicate adult/explicit content.
+_ADULT_CONTENT_SIGNALS: frozenset = frozenset([
+    "adult content", "explicit content", "sexually explicit",
+    "pornography", "xxx", "18+ only", "18 and over", "adults only",
+    "nudity", "erotic", "mature content",
+])
+
+
 def _is_safe_url(url: str) -> bool:
-    """Block SSRF: reject non-http(s) schemes and private/loopback IPs."""
+    """Block SSRF, adult domains, and obviously malicious hostnames."""
     try:
+        if len(url) > _URL_MAX_LENGTH:
+            return False
         from urllib.parse import urlparse
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
@@ -289,18 +319,38 @@ def _is_safe_url(url: str) -> bool:
         host = parsed.hostname or ""
         if not host:
             return False
+        host_lower = host.lower()
+
+        # SSRF: block private/loopback IPs
         blocked_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
-        if host.lower() in blocked_hosts:
+        if host_lower in blocked_hosts:
             return False
         try:
             addr = ipaddress.ip_address(host)
             if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
                 return False
         except ValueError:
-            pass  # hostname, not a bare IP — allow
+            pass  # hostname, not a bare IP — fine
+
+        # Block Tor and high-abuse TLDs
+        for tld in _BLOCKED_TLDS:
+            if host_lower.endswith(tld):
+                return False
+
+        # Block adult / malicious domain names
+        for fragment in _BLOCKED_HOST_FRAGMENTS:
+            if fragment in host_lower:
+                return False
+
         return True
     except Exception:
         return False
+
+
+def _is_safe_scraped_content(title: str, description: str) -> bool:
+    """Scan scraped page title + description for adult/explicit content signals."""
+    combined = f"{title} {description}".lower()
+    return not any(signal in combined for signal in _ADULT_CONTENT_SIGNALS)
 
 
 async def _safe_http_get(url: str, headers: dict | None = None, max_redirects: int = 5) -> httpx.Response:
@@ -1925,17 +1975,29 @@ Return ONLY the ffmpeg command as a single line. No markdown, no explanation. Us
 @api_router.post("/scrape")
 async def scrape_url(url: str = Form(...)):
     if not _is_safe_url(url):
-        raise HTTPException(status_code=400, detail="Invalid or disallowed URL")
+        raise HTTPException(status_code=400, detail="Invalid or disallowed URL. Please enter a legitimate business product URL.")
     try:
         ua_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = await _safe_http_get(url, headers=ua_headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Only parse HTML — reject binary, JSON feeds, etc.
+        content_type = response.headers.get("content-type", "")
+        if "text/html" not in content_type and "text/plain" not in content_type:
+            raise HTTPException(status_code=422, detail="URL does not point to a web page.")
+
+        # Cap HTML size at 2 MB to prevent memory abuse
+        html = response.text[:2 * 1024 * 1024]
+        soup = BeautifulSoup(html, 'html.parser')
 
         title = soup.find('title')
         headline = title.string if title else "Your Product"
 
         meta_desc = soup.find('meta', attrs={'name': 'description'})
         description = meta_desc['content'] if meta_desc else "Amazing product description"
+
+        # Content safety — block adult/explicit pages even if the domain passed
+        if not _is_safe_scraped_content(headline, description):
+            raise HTTPException(status_code=422, detail="This URL cannot be processed. Please use a business product URL.")
 
         features = []
         for tag in soup.find_all(['h2', 'h3', 'li']):
