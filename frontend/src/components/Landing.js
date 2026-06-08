@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Sparkles, Zap, FileText, Image, Video, ArrowRight, Check,
   Palette, Scale, MessageSquare, Shield, Briefcase, Users,
-  Globe, Wand2, Mic, Download, RefreshCw, ChevronRight
+  Globe, Wand2, Mic, Download, RefreshCw, ChevronRight, MonitorPlay, Chrome
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────
@@ -70,12 +70,12 @@ export function Landing() {
     },
     {
       name: 'Starter', price: '19', desc: 'For solo founders launching weekly.',
-      features: ['Logo + AI concepts', '15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed'],
+      features: ['Logo + AI concepts', '15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed', 'Tutorial Studio (Chrome extension)'],
       legal: '20 legal credits / month · 1 business profile', cta: 'Get Starter', featured: true,
     },
     {
       name: 'Pro', price: '49', desc: 'Power users and serious launchers.',
-      features: ['50 videos / month', '200 scripts / month', 'GPU-accelerated cinematic video', 'Talking head feature'],
+      features: ['50 videos / month', '200 scripts / month', 'GPU-accelerated cinematic video', 'Tutorial Studio (Chrome extension)', 'Talking head feature'],
       legal: '60 legal credits / month · 3 business profiles', cta: 'Get Pro', featured: false,
     },
     {
@@ -91,6 +91,7 @@ export function Landing() {
     { icon: <Wand2 className="w-5 h-5" />, title: '3 Script Frameworks', desc: 'Gemini AI writes PAS (Problem-Agitate-Solve), Step-by-Step tutorial, and Before/After transformation scripts — from your URL, in seconds.' },
     { icon: <Image className="w-5 h-5" />, title: 'Brand-Matched Posters', desc: 'Extracts your exact brand colors and messaging from any URL. Every poster is typeset to match your product identity.' },
     { icon: <Mic className="w-5 h-5" />, title: 'Neural Voiceover + Music', desc: 'Human-quality neural voiceover with royalty-free background music and animated UGC-style captions — sounds like a real presenter, not a robot.' },
+    { icon: <MonitorPlay className="w-5 h-5" />, title: 'Tutorial Studio', desc: 'Record your product in action — AI watches each screen, writes the narration, adds a voice, and delivers a polished YouTube tutorial in 2 minutes. No video editor, no script writing.' },
     { icon: <Globe className="w-5 h-5" />, title: 'URL Intelligence', desc: 'Scrapes brand colors, headlines, and features from any website. One URL kick-starts the entire pipeline.' },
   ];
 
