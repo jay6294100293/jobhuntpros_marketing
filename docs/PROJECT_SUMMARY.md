@@ -24,15 +24,22 @@ LaunchBusiness AI is a two-pillar platform for founders:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Magic Button pipeline | ✅ Live | URL → scrape → scripts → videos → posters |
+| Magic Button pipeline | ✅ Live | URL → 5 parallel scripts → 4 format videos → 2 posters |
 | Logo Creator | ✅ Live | 6 Pillow templates + Ideogram AI concepts |
-| Edge TTS voiceover | ✅ Live | Microsoft AndrewNeural, free, no API key |
+| Edge TTS voiceover | ✅ Live | Microsoft AndrewNeural, free, no API key needed |
 | 6-slide design system | ✅ Live | Hero, Problem, Solution, Features, HowItWorks, CTA |
 | Crossfade transitions | ✅ Live | FFmpeg xfade, 0.5s fade |
 | Background music bed | ✅ Live | Drop .mp3 into `backend/assets/music_beds/` |
 | Watermark | ✅ Live | Diagonal stamps burned into slide content, 30% opacity |
 | Stripe subscriptions | ✅ Code done | Needs STRIPE_SECRET_KEY + price IDs in secrets |
-| Modal Wan 2.2 Video | 🔄 Rewrite needed | Replace LTX-Video with Wan 2.2 TI2V-5B in `modal_video.py`, then deploy |
+| Modal Wan 2.2 Video | ✅ Code done | Wan 2.2 TI2V-5B on A10G — needs `modal deploy backend/modal_video.py` |
+| Tutorial Studio | ✅ Code done | Chrome extension + server endpoint + frontend (Starter+) |
+| Brand Profiles | ✅ Live | CRUD, logo-on-slides, 4:5 format, ZIP download |
+| Format-specific scripts | ✅ Live | Each format gets word-count-targeted Gemini prompt |
+| Audio-driven duration | ✅ Live | Video length matches narration via ffprobe |
+| URL safety — hostname | ✅ Live | Blocks adult domains + malicious hostnames + bad TLDs |
+| URL safety — content | ✅ Live | Post-scrape scan for adult/explicit signals in title+desc |
+| URL safety — Safe Browsing | ✅ Code done | Google Safe Browsing API v4 — needs GOOGLE_SAFE_BROWSING_API_KEY |
 | SadTalker talking head | ✅ Code done | Needs Modal deploy + Stripe Identity activation |
 | Open registration | ✅ Live | Auto-login, password + confirm fields |
 
@@ -56,7 +63,7 @@ LaunchBusiness AI is a two-pillar platform for founders:
 ## Tech Stack
 
 ```
-Backend:    FastAPI (Python 3.11) — server.py (~2900 lines) + legal_router.py + jarvis_router.py
+Backend:    FastAPI (Python 3.11) — server.py (~3100 lines) + legal_router.py + jarvis_router.py + brand_router.py
 Frontend:   React 19 + Tailwind CSS 3.4 + Shadcn/UI + Framer Motion + React Router DOM 7.5.1
 Database:   MongoDB (Motor async driver)
 AI/LLM:     Google Gemini 2.5 Flash (google-genai SDK)
@@ -82,12 +89,17 @@ POST /api/magic-button
   1. scrape_url()             → brand colors, headline, features, images[]
   2. generate_script(PAS)     → ad script (Gemini)
   3. generate_script(Step)    → tutorial script (Gemini)
-  4. create_complete_video()  → 9:16 ad video
-     ├── Free/Starter: Pillow 6-slide + xfade + Edge TTS + watermark + music
-     └── Pro/Agency:   Modal LTX-Video AI → FFmpeg captions (fallback: slideshow)
-  5. create_complete_video()  → 16:9 tutorial video
-  6. create_poster()          → 1:1 social poster
-  7. create_poster()          → 9:16 social poster
+  2. generate_script() × 5 parallel (PAS@9:16, Step-by-Step@16:9,
+     Before/After@9:16, PAS@1:1, PAS@4:5) — format-targeted word counts
+  3. create_complete_video() × 4 parallel:
+     ├── 9:16  TikTok / Reels / Shorts
+     ├── 16:9  YouTube / LinkedIn
+     ├── 1:1   Instagram / Twitter
+     └── 4:5   Facebook / IG Feed
+     Each: Pillow slides + Pexels B-roll + Wan 2.2 AI clip + Edge TTS + music
+     Duration: audio-driven via ffprobe (not flat 3s/slide)
+  4. create_poster()  → 1:1 social poster
+  5. create_poster()  → 9:16 social poster
 ```
 
 ---
@@ -118,7 +130,7 @@ POST /api/legal/regenerate/{id}
 backend/server.py              Main FastAPI backend — auth, video, posters, Stripe, Magic Button
 backend/legal_router.py        Legal documents — profiles, chat, catalog, generate, topup
 backend/jarvis_router.py       JARVIS business intelligence (GET /api/jarvis/pulse)
-backend/modal_video.py         Modal LTX-Video serverless GPU app
+backend/modal_video.py         Modal Wan 2.2 TI2V-5B serverless GPU app (A10G)
 backend/modal_sadtalker.py     Modal SadTalker talking head GPU app
 backend/requirements.txt       Python dependencies
 
@@ -133,11 +145,21 @@ frontend/src/components/
   legal/DocumentVault.js       Document list + markdown viewer + regen button
   legal/TopupModal.js          Stripe credit topup — 3 packages
   LogoCreator.js               Logo generator UI
-  Layout.js                    Nav with Legal link added
+  Layout.js                    Nav with Legal + Tutorial + Brands links
+  TutorialStudio.js            Tutorial Studio — upload recording, view result
+  BrandProfiles.js             Brand profile CRUD + logo picker
+
+extension/
+  manifest.json                Chrome Extension Manifest V3
+  background.js                Service worker — tab capture stream ID
+  popup.html / popup.js        Record/Stop UI + MediaRecorder + upload
 
 docs/PROJECT_SUMMARY.md        This file
 docs/PRODUCT_STRATEGY.md       Business model, pricing strategy, roadmap
 docs/VIDEO_FEATURES.md         Video pipeline detail
+docs/WAN_VIDEO_UPGRADE.md      Wan 2.2 decision doc + code change summary
+docs/TUTORIAL_STUDIO.md        Chrome extension spec + server endpoint spec
+docs/BRAND_PROFILE_FEATURE.md  Brand Profile feature — all 15 items DONE
 ```
 
 ---
@@ -180,10 +202,16 @@ STRIPE_STARTER_PRICE_ID=price_...
 STRIPE_PRO_PRICE_ID=price_...
 STRIPE_AGENCY_PRICE_ID=price_...
 
-# Modal GPU (Pro/Agency)
+# URL safety
+GOOGLE_SAFE_BROWSING_API_KEY=...  # console.cloud.google.com → Enable Safe Browsing API
+
+# Pexels B-roll (free at pexels.com/api)
+PEXELS_API_KEY=...
+
+# Modal GPU (Starter+/Pro/Agency)
 MODAL_TOKEN_ID=...
 MODAL_TOKEN_SECRET=...
-MODAL_APP_NAME=launchbusiness-ltx-video
+MODAL_APP_NAME=launchbusiness-wan-video
 MODAL_SADTALKER_APP=launchbusiness-sadtalker
 
 # Optional

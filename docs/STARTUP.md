@@ -111,19 +111,32 @@ All steps documented in `docs/CREDENTIALS_SETUP.md`.
 1. `MONGODB_URL` — MongoDB Atlas free cluster connection string
 2. `GEMINI_API_KEY` — Google AI Studio key (for scripts, poster AI, Tutorial narration)
 3. `JWT_SECRET` — any 32+ char random string
-4. `STRIPE_SECRET_KEY` + webhook secret + 3 price IDs — for subscriptions
+4. `GOOGLE_SAFE_BROWSING_API_KEY` — blocks malware/phishing URLs (free, 10k/day)
+5. `STRIPE_SECRET_KEY` + webhook secret + 3 price IDs — for subscriptions
 
-### For GPU video (Pro/Agency tiers)
+### For GPU video (Starter+ tiers)
 
-5. `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET` — Modal.com account
-6. Deploy: `modal deploy backend/modal_video.py`
-7. Add to secrets: `MODAL_APP_NAME=launchbusiness-wan-video`
+6. `MODAL_TOKEN_ID` + `MODAL_TOKEN_SECRET` — Modal.com account
+7. Deploy: `modal deploy backend/modal_video.py`
+8. Add to secrets: `MODAL_APP_NAME=launchbusiness-wan-video`
 
 ### Optional (activate features)
 
-8. `PEXELS_API_KEY` — free at pexels.com/api — enables B-roll in video pipeline
-9. `BREVO_API_KEY` — transactional email (password reset, etc.)
-10. `OPENROUTER_API_KEY` — Gemini fallback during outages
+9. `PEXELS_API_KEY` — free at pexels.com/api — enables B-roll in video pipeline
+10. `BREVO_API_KEY` — transactional email (password reset, etc.)
+11. `OPENROUTER_API_KEY` — Gemini fallback during outages
+
+### How to get GOOGLE_SAFE_BROWSING_API_KEY (5 minutes, free)
+
+1. Go to console.cloud.google.com
+2. Select or create a project
+3. APIs & Services → Library → search "Safe Browsing API" → Enable
+4. APIs & Services → Credentials → Create Credentials → API Key
+5. Add to `/root/secrets/swiftpack.env`: `GOOGLE_SAFE_BROWSING_API_KEY=your_key`
+
+What it protects against: phishing sites, malware distribution sites, social engineering
+pages that have clean-looking domain names but are known to Google's threat database.
+Free quota is 10,000 URL checks/day — more than enough for any launch volume.
 
 Edge TTS (AndrewNeural voice) requires **no API key** — it's free and already working.
 

@@ -131,6 +131,10 @@ MODAL_ENABLED = bool(MODAL_TOKEN_ID and MODAL_TOKEN_SECRET)
 # Pexels B-roll (optional — set PEXELS_API_KEY to enable real video backgrounds for all tiers)
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY', '')
 
+# Google Safe Browsing API v4 (optional but recommended — blocks malware/phishing URLs)
+# Get key: console.cloud.google.com → Enable "Safe Browsing API" → Create API Key
+GOOGLE_SAFE_BROWSING_API_KEY = os.getenv('GOOGLE_SAFE_BROWSING_API_KEY', '')
+
 # ── MongoDB ────────────────────────────────────────────────────────────────────
 mongo_url = os.environ['MONGODB_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -351,6 +355,48 @@ def _is_safe_scraped_content(title: str, description: str) -> bool:
     """Scan scraped page title + description for adult/explicit content signals."""
     combined = f"{title} {description}".lower()
     return not any(signal in combined for signal in _ADULT_CONTENT_SIGNALS)
+
+
+async def _check_safe_browsing(url: str) -> tuple[bool, str]:
+    """Check URL against Google Safe Browsing API v4.
+
+    Returns (is_safe, threat_type).
+    Fails open — if the API key is absent or the call errors, returns (True, "")
+    so a network blip never breaks the product for legitimate users.
+    """
+    if not GOOGLE_SAFE_BROWSING_API_KEY:
+        return True, ""
+    try:
+        endpoint = (
+            "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+            f"?key={GOOGLE_SAFE_BROWSING_API_KEY}"
+        )
+        payload = {
+            "client": {"clientId": "launchbusinessai", "clientVersion": "1.0.0"},
+            "threatInfo": {
+                "threatTypes": [
+                    "MALWARE",
+                    "SOCIAL_ENGINEERING",
+                    "UNWANTED_SOFTWARE",
+                    "POTENTIALLY_HARMFUL_APPLICATION",
+                ],
+                "platformTypes": ["ANY_PLATFORM"],
+                "threatEntryTypes": ["URL"],
+                "threatEntries": [{"url": url}],
+            },
+        }
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(endpoint, json=payload)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("matches"):
+                threat_type = data["matches"][0].get("threatType", "UNKNOWN")
+                logger.warning(f"Safe Browsing blocked URL [{threat_type}]: {url}")
+                return False, threat_type
+        return True, ""
+    except Exception as exc:
+        logger.warning(f"Safe Browsing check failed (non-fatal, allowing): {exc}")
+        return True, ""
 
 
 async def _safe_http_get(url: str, headers: dict | None = None, max_redirects: int = 5) -> httpx.Response:
@@ -1976,6 +2022,15 @@ Return ONLY the ffmpeg command as a single line. No markdown, no explanation. Us
 async def scrape_url(url: str = Form(...)):
     if not _is_safe_url(url):
         raise HTTPException(status_code=400, detail="Invalid or disallowed URL. Please enter a legitimate business product URL.")
+
+    # Google Safe Browsing — catches phishing/malware sites with clean domain names
+    _sb_safe, _sb_threat = await _check_safe_browsing(url)
+    if not _sb_safe:
+        raise HTTPException(
+            status_code=422,
+            detail="This URL has been flagged as potentially harmful and cannot be processed."
+        )
+
     try:
         ua_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = await _safe_http_get(url, headers=ua_headers)
