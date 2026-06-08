@@ -75,7 +75,7 @@ export function Landing() {
     },
     {
       name: 'Pro', price: '49', desc: 'Power users and serious launchers.',
-      features: ['50 videos / month', '200 scripts / month', 'AI video on A100 GPU', 'Talking head feature'],
+      features: ['50 videos / month', '200 scripts / month', 'Wan 2.2 AI video on Modal A10G', 'Talking head feature'],
       legal: '60 legal credits / month · 3 business profiles', cta: 'Get Pro', featured: false,
     },
     {
@@ -87,7 +87,7 @@ export function Landing() {
 
   const launchFeatures = [
     { icon: <Palette className="w-5 h-5" />, title: 'Logo Creator', desc: '6 AI-powered templates + Ideogram AI concepts. Your colors, your style — a production-ready 1024×1024 brand logo in seconds.' },
-    { icon: <Video className="w-5 h-5" />, title: 'AI Video Generation', desc: 'Pro/Agency: LTX-Video on Modal A100 GPU for cinematic clips. All tiers: polished animated slideshows with neural voiceover and animated captions.' },
+    { icon: <Video className="w-5 h-5" />, title: 'AI Video Generation', desc: 'Starter+: Wan 2.2 TI2V-5B on Modal A10G animates your actual Hero slide into a cinematic branded clip ($0.03/clip). All tiers: polished animated slideshows with neural voiceover and animated captions.' },
     { icon: <Wand2 className="w-5 h-5" />, title: '3 Script Frameworks', desc: 'Gemini AI writes PAS (Problem-Agitate-Solve), Step-by-Step tutorial, and Before/After transformation scripts — from your URL, in seconds.' },
     { icon: <Image className="w-5 h-5" />, title: 'Brand-Matched Posters', desc: 'Extracts your exact brand colors and messaging from any URL. Every poster is typeset to match your product identity.' },
     { icon: <Mic className="w-5 h-5" />, title: 'Neural Voiceover + Music', desc: 'Microsoft Edge TTS (Andrew Neural) with royalty-free background music at -18 dB and animated UGC-style captions — production-ready.' },
