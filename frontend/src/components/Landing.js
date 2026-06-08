@@ -85,6 +85,10 @@ export function Landing() {
     },
   ];
 
+  // Update this URL once the extension is published to the Chrome Web Store:
+  // https://chrome.google.com/webstore/detail/<extension-id>
+  const EXTENSION_URL = 'https://chrome.google.com/webstore/search/LaunchBusiness%20AI';
+
   const launchFeatures = [
     { icon: <Palette className="w-5 h-5" />, title: 'Logo Creator', desc: '6 AI-powered templates + Ideogram AI concepts. Your colors, your style — a production-ready 1024×1024 brand logo in seconds.' },
     { icon: <Video className="w-5 h-5" />, title: 'AI Video Generation', desc: 'Paste a URL — get cinematic branded video clips that animate your actual product visuals. All formats: TikTok (9:16), YouTube (16:9), Instagram (1:1), Facebook (4:5). Polished voiceover and animated captions included.' },
@@ -118,6 +122,14 @@ export function Landing() {
           <a href="#features" className="hover:text-white transition-colors no-underline">Features</a>
           <a href="#legal" className="hover:text-white transition-colors no-underline">Legal Docs</a>
           <a href="#pricing" className="hover:text-white transition-colors no-underline">Pricing</a>
+          <a href={EXTENSION_URL} target="_blank" rel="noreferrer"
+            className="hidden lg:flex items-center gap-1.5 text-xs font-semibold no-underline transition-all px-3 py-1.5 rounded-md border"
+            style={{ color: '#a5b4fc', borderColor: 'rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.08)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.6)'; e.currentTarget.style.color = '#c7d2fe'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.35)'; e.currentTarget.style.color = '#a5b4fc'; }}
+          >
+            <Chrome className="w-3.5 h-3.5" /> Chrome Extension
+          </a>
         </div>
         <div className="flex items-center gap-3">
           <Link to="/login" className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors no-underline">Log in</Link>
@@ -154,6 +166,7 @@ export function Landing() {
             { icon: <Scale className="w-3 h-3" />, label: '28 Legal Documents' },
             { icon: <Shield className="w-3 h-3" />, label: 'GDPR · PIPEDA · CCPA' },
             { icon: <MessageSquare className="w-3 h-3" />, label: 'AI Intake Chat' },
+            { icon: <Chrome className="w-3 h-3" />, label: 'Chrome Extension' },
             { icon: <Globe className="w-3 h-3" />, label: 'URL Intelligence' },
           ].map(f => (
             <span key={f.label} className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border" style={{ background: 'rgba(39,39,42,0.7)', borderColor: 'rgba(255,255,255,0.08)', color: '#a1a1aa' }}>
@@ -173,6 +186,12 @@ export function Landing() {
           <Link to="/login" className="flex items-center gap-2 px-7 py-3.5 text-sm font-medium text-zinc-300 rounded-lg no-underline transition-all border border-zinc-800 hover:border-zinc-600 hover:text-white" style={{ fontSize: 15 }}>
             Sign in <ArrowRight className="w-4 h-4" />
           </Link>
+          <a href={EXTENSION_URL} target="_blank" rel="noreferrer"
+            className="flex items-center gap-2 px-5 py-3.5 text-sm font-semibold rounded-lg no-underline active:scale-95 transition-all border"
+            style={{ fontSize: 14, color: '#a5b4fc', borderColor: 'rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.08)' }}
+          >
+            <Chrome className="w-4 h-4" /> Get Chrome Extension
+          </a>
         </div>
 
         {/* ── 3-column value trio — what each pillar delivers ── */}
@@ -309,20 +328,35 @@ export function Landing() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {launchFeatures.map((f, i) => (
-              <div key={i} ref={addRef} style={{ ...rv(i * 0.08), display: 'flex', flexDirection: 'column', gap: 12, ...CARD, padding: '22px 20px', cursor: 'default', transition: `opacity 0.6s ease ${i * 0.08}s, transform 0.6s ease ${i * 0.08}s, border-color 0.3s ease` }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.22)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; }}
-              >
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}>
-                  {f.icon}
+            {launchFeatures.map((f, i) => {
+              const isTutorial = f.title === 'Tutorial Studio';
+              return (
+                <div key={i} id={isTutorial ? 'extension' : undefined} ref={addRef}
+                  style={{ ...rv(i * 0.08), display: 'flex', flexDirection: 'column', gap: 12, ...CARD, padding: '22px 20px', cursor: 'default', transition: `opacity 0.6s ease ${i * 0.08}s, transform 0.6s ease ${i * 0.08}s, border-color 0.3s ease`,
+                    ...(isTutorial ? { borderColor: 'rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.04)' } : {}) }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.22)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = isTutorial ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.07)'; }}
+                >
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8' }}>
+                    {f.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#fafafa', marginBottom: 6 }}>{f.title}</div>
+                    <p style={{ fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>{f.desc}</p>
+                  </div>
+                  {isTutorial && (
+                    <a href={EXTENSION_URL} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold no-underline mt-auto transition-colors"
+                      style={{ color: '#818cf8' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#a5b4fc'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#818cf8'; }}
+                    >
+                      <Chrome className="w-3.5 h-3.5" /> Install from Chrome Web Store →
+                    </a>
+                  )}
                 </div>
-                <div>
-                  <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#fafafa', marginBottom: 6 }}>{f.title}</div>
-                  <p style={{ fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>{f.desc}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
