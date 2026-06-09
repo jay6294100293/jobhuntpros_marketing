@@ -34,8 +34,8 @@ export const Layout = ({ children }) => {
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center" data-testid="app-title">
-              <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 44 }} />
+            <div style={{ background: '#ffffff', borderRadius: 10, padding: '4px 10px' }} data-testid="app-title">
+              <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 36 }} />
             </div>
 
             <div className="flex gap-1">

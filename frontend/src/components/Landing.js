@@ -113,7 +113,9 @@ export function Landing() {
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5">
         <Link to="/" className="flex items-center no-underline">
-          <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 44 }} />
+          <div style={{ background: '#ffffff', borderRadius: 10, padding: '4px 10px' }}>
+            <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 36 }} />
+          </div>
         </Link>
         <div className="hidden md:flex items-center gap-6 text-sm text-zinc-400">
           <a href="#features" className="hover:text-white transition-colors no-underline">Features</a>

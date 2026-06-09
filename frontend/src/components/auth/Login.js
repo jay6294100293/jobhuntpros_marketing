@@ -30,7 +30,9 @@ export const Login = () => {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="LaunchBusiness AI" className="h-20 mx-auto mb-2" />
+          <div className="inline-block mb-2" style={{ background: '#ffffff', borderRadius: 12, padding: '8px 16px' }}>
+            <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 64 }} />
+          </div>
           <p className="text-zinc-400 mt-2">Sign in to your account</p>
         </div>
 
