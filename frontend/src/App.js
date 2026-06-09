@@ -27,7 +27,19 @@ import './App.css';
 const ProtectedApp = () => {
   const { user, loading, acceptAgreement } = useAuth();
 
-  if (loading) return null;
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-8">
+      <div className="absolute pointer-events-none" style={{ width: 500, height: 500, background: 'radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+      <div style={{ background: '#ffffff', borderRadius: 16, padding: '14px 24px' }}>
+        <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 72 }} />
+      </div>
+      <div className="flex items-center gap-2">
+        {[0, 150, 300].map((delay, i) => (
+          <div key={i} className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" style={{ animationDelay: `${delay}ms` }} />
+        ))}
+      </div>
+    </div>
+  );
 
   // Not logged in — show landing page
   if (!user) return <Landing />;
