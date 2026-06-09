@@ -69,12 +69,12 @@ export function Landing() {
       legal: null, cta: 'Start free', featured: false,
     },
     {
-      name: 'Starter', price: '19', desc: 'For solo founders launching weekly.',
+      name: 'Starter', price: '19', desc: 'For founders building and marketing every week.',
       features: ['Logo + AI concepts', '15 videos / month', '50 scripts / month', 'All formats (9:16, 16:9, 1:1)', 'No watermark + music bed', 'Tutorial Studio (Chrome extension)'],
       legal: '20 legal credits / month · 1 business profile', cta: 'Get Starter', featured: true,
     },
     {
-      name: 'Pro', price: '49', desc: 'Power users and serious launchers.',
+      name: 'Pro', price: '49', desc: 'Power users scaling their marketing output.',
       features: ['50 videos / month', '200 scripts / month', 'GPU-accelerated cinematic video', 'Tutorial Studio (Chrome extension)', 'Talking head feature'],
       legal: '60 legal credits / month · 3 business profiles', cta: 'Get Pro', featured: false,
     },
@@ -146,14 +146,13 @@ export function Landing() {
         <div ref={addRef} style={rv(0.1)}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-8 border" style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            Launch pack in 90 seconds · Legal documents · Built for founders
+            Logo. Marketing. Legal. All AI · Built for founders
           </div>
         </div>
 
         <h1 ref={addRef} style={{ ...rv(0.2), fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(36px, 5vw, 68px)', letterSpacing: '-2.5px', lineHeight: 1.06, maxWidth: 820, marginBottom: 20 }}>
-          From URL to launch-ready.{' '}
-          <span style={GRD}>Marketing + legal,</span>{' '}
-          covered.
+          Your business toolkit,{' '}
+          <span style={GRD}>AI-powered.</span>
         </h1>
 
         {/* ── Feature pills — visible without scrolling ── */}
@@ -176,7 +175,7 @@ export function Landing() {
         </div>
 
         <p ref={addRef} style={{ ...rv(0.3), fontSize: 17, lineHeight: 1.6, color: '#71717a', maxWidth: 520, marginBottom: 28 }}>
-          Paste a URL → marketing pack in 90s. Tell the AI about your business → legal documents tailored to your jurisdiction. What used to cost $400–$6,900. Now in minutes.
+          Logo. Videos. Scripts. Posters. Legal docs. Everything your business runs on — not just at launch, but every week. What used to cost $400–$6,900. Now in minutes.
         </p>
 
         <div ref={addRef} style={{ ...rv(0.4), display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 28 }}>
@@ -198,19 +197,19 @@ export function Landing() {
         <div ref={addRef} style={{ ...rv(0.42), display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, width: '100%', maxWidth: 680, marginBottom: 28 }}>
           {[
             {
+              color: '#f0abfc',
+              title: '🎨 Branding',
+              items: ['Logo creator · 6 AI templates', 'Ideogram AI concepts', 'Brand profile · colors + fonts', 'Reuse across all tools'],
+            },
+            {
               color: '#818cf8',
-              title: '🚀 Marketing Pack',
-              items: ['Brand logo · AI templates', 'Videos with neural voiceover', 'PAS + tutorial scripts', 'Brand-matched posters'],
+              title: '📣 Marketing',
+              items: ['Videos with neural voiceover', 'PAS + tutorial scripts', 'Brand-matched posters', 'Tutorial Studio (Chrome ext)'],
             },
             {
               color: '#6ee7b7',
-              title: '⚖️ Legal Documents',
+              title: '⚖️ Legal',
               items: ['28 document types', 'GDPR · PIPEDA · CCPA', '2026 law — fetched live', 'AI intake chat, not forms'],
-            },
-            {
-              color: '#a78bfa',
-              title: '⚡ All in One Platform',
-              items: ['No agencies needed', 'No lawyers on retainer', 'Free tier to start', 'Credits never expire'],
             },
           ].map(col => (
             <div key={col.title} style={{ background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '14px 14px' }}>
@@ -274,7 +273,7 @@ export function Landing() {
       <div style={{ background: 'rgba(24,24,27,0.5)', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-4xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
-            { num: '90s', label: 'Full marketing pack' },
+            { num: '90s', label: 'Full marketing pack generated' },
             { num: '28', label: 'Legal document types' },
             { num: '2026', label: 'Law context included' },
             { num: '$0', label: 'To start on free tier' },
@@ -292,9 +291,9 @@ export function Landing() {
         <div ref={addRef} style={rv(0)}>
           <div className="text-xs font-semibold tracking-widest uppercase text-indigo-400 mb-4">How it works</div>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(30px, 4vw, 50px)', letterSpacing: '-1.5px', marginBottom: 12, color: '#fafafa' }}>
-            From zero to launched. In minutes.
+            Build, market, and protect<br />your business.
           </h2>
-          <p className="text-zinc-400 text-lg max-w-lg">No designers, no copywriters, no lawyers on retainer.</p>
+          <p className="text-zinc-400 text-lg max-w-lg">No designers, no copywriters, no lawyers on retainer. Ever.</p>
         </div>
 
         <div className="grid md:grid-cols-4 gap-5 mt-14">
@@ -324,7 +323,7 @@ export function Landing() {
             <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(30px, 4vw, 50px)', letterSpacing: '-1.5px', color: '#fafafa' }}>
               Production quality.<br />Zero production time.
             </h2>
-            <p className="text-zinc-400 mt-3 max-w-lg">Paste your URL and walk away with everything a launch needs — logo, videos, scripts, and posters.</p>
+            <p className="text-zinc-400 mt-3 max-w-lg">Paste your URL and walk away with everything your business needs — not just at launch, but every week.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -510,10 +509,10 @@ export function Landing() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 70%)' }} />
         <div ref={addRef} style={rv(0)}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 'clamp(34px, 5vw, 62px)', letterSpacing: '-2px', color: '#fafafa', marginBottom: 16, lineHeight: 1.1 }}>
-            Your next launch.<br />
-            <span style={GRD}>90 seconds away.</span>
+            Everything your business needs.<br />
+            <span style={GRD}>AI-powered.</span>
           </h2>
-          <p className="text-zinc-400 text-lg mb-4">Marketing pack. Legal documents. Everything in one platform.</p>
+          <p className="text-zinc-400 text-lg mb-4">Branding. Marketing. Legal. One platform, used every week.</p>
           <p className="text-zinc-600 text-sm mb-10">What agencies charge $400–1,900 for. What lawyers charge $5,000+ for.</p>
           <Link to="/register" className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-white rounded-lg no-underline active:scale-95 transition-all" style={{ ...BTN_PRIMARY, boxShadow: '0 0 40px rgba(99,102,241,0.4)' }}>
             <Zap className="w-5 h-5" /> Create free account
