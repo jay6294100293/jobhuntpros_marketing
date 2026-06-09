@@ -1,6 +1,6 @@
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
+import { Mail, Lock, Chrome, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 
@@ -30,10 +30,7 @@ export const Login = () => {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 items-center justify-center mb-4">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-heading font-bold text-gradient">LaunchBusiness AI</h1>
+          <img src="/logo.png" alt="LaunchBusiness AI" className="h-20 mx-auto mb-2" />
           <p className="text-zinc-400 mt-2">Sign in to your account</p>
         </div>
 
