@@ -34,14 +34,11 @@ export const Layout = ({ children }) => {
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <Sparkles className="w-4 h-4 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl font-heading font-bold text-gradient" data-testid="app-title">LaunchBusiness AI</h1>
-                <p className="text-xs text-zinc-500 font-mono">Launch Pack Generator</p>
-              </div>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }} data-testid="app-title">LaunchBusiness AI</span>
             </div>
 
             <div className="flex gap-1">
