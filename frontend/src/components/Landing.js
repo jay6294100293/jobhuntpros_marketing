@@ -112,10 +112,11 @@ export function Landing() {
 
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5">
-        <Link to="/" className="flex items-center no-underline">
-          <div style={{ background: '#ffffff', borderRadius: 10, padding: '4px 10px' }}>
-            <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 36 }} />
+        <Link to="/" className="flex items-center gap-2.5 no-underline">
+          <div style={{ height: 36, overflow: 'hidden', flexShrink: 0 }}>
+            <img src="/logo.png" alt="" style={{ height: 58 }} />
           </div>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: '#fff' }}>LaunchBusiness AI</span>
         </Link>
         <div className="hidden md:flex items-center gap-6 text-sm text-zinc-400">
           <a href="#features" className="hover:text-white transition-colors no-underline">Features</a>
@@ -522,7 +523,12 @@ export function Landing() {
 
       {/* ── Footer ── */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '24px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <img src="/logo.png" alt="LaunchBusiness AI" style={{ height: 28 }} />
+        <div className="flex items-center gap-2">
+          <div style={{ height: 24, overflow: 'hidden', flexShrink: 0 }}>
+            <img src="/logo.png" alt="" style={{ height: 38 }} />
+          </div>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14, color: '#52525b' }}>LaunchBusiness AI</span>
+        </div>
         <div className="flex gap-6">
           {[['Pricing', '#pricing'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['NovaJay Tech', 'https://novajaytech.com']].map(([label, href]) => (
             <a key={label} href={href} style={{ fontSize: 13, color: '#3f3f46', textDecoration: 'none', transition: 'color 0.2s' }}
