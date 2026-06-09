@@ -3910,17 +3910,17 @@ def _hex_to_rgb(hex_color: str) -> tuple:
 def _logo_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     candidates = (
         [
+            str(_FONTS_DIR / "Poppins-ExtraBold.ttf"),
+            str(_FONTS_DIR / "Poppins-Bold.ttf"),
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
             "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/calibrib.ttf",
         ] if bold else [
+            str(_FONTS_DIR / "DMSans-Medium.ttf"),
+            str(_FONTS_DIR / "DMSans-Regular.ttf"),
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
             "C:/Windows/Fonts/arial.ttf",
-            "C:/Windows/Fonts/calibri.ttf",
         ]
     )
     for fp in candidates:
@@ -3929,6 +3929,14 @@ def _logo_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
         except Exception:
             pass
     return ImageFont.load_default()
+
+
+def _rr(d: ImageDraw.ImageDraw, xy, radius: int, fill) -> None:
+    """Rounded rectangle — Pillow 8.2+ with rectangle fallback."""
+    try:
+        d.rounded_rectangle(xy, radius=radius, fill=fill)
+    except AttributeError:
+        d.rectangle(xy, fill=fill)
 
 
 def _tcx(draw, text, font, w):
@@ -3961,127 +3969,180 @@ def _draw_block(draw, lines, font, w, y, color, gap=12):
 
 
 def _logo_minimal(brand_name, tagline, c1, c2):
+    """Wordmark: small colored icon square, large brand name, accent bar, tagline."""
     S = _LOGO_SIZE
     img = Image.new('RGB', (S, S), _LOGO_BG)
     d = ImageDraw.Draw(img)
-    d.rectangle([72, 240, 84, S - 240], fill=c1)
-    nf = _logo_font(80, bold=True)
-    y = _draw_block(d, _wrap(d, brand_name, nf, S - 200), nf, S, 300, _LOGO_WHITE, 14)
+    nf = _logo_font(92, bold=True)
+    tf = _logo_font(42)
+    nlines = _wrap(d, brand_name, nf, S - 120)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 14 for l in nlines)
+    sq, gap = 90, 36
+    total_h = sq + gap + name_h + 16
+    tlines = []
     if tagline:
-        tf = _logo_font(38)
-        _draw_block(d, _wrap(d, tagline, tf, S - 200), tf, S, y + 24, _LOGO_MUTED, 8)
-    d.rectangle([72, S - 88, S - 72, S - 76], fill=c1)
+        tlines = _wrap(d, tagline, tf, S - 160)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 24
+    y = (S - total_h) // 2
+    sx = (S - sq) // 2
+    _rr(d, [sx, y, sx + sq, y + sq], 18, c1)
+    y += sq + gap
+    y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 14)
+    bar = 140
+    d.rectangle([(S - bar) // 2, y + 10, (S + bar) // 2, y + 15], fill=c1)
+    if tlines:
+        _draw_block(d, tlines, tf, S, y + 34, _LOGO_MUTED, 8)
     return img
 
 
 def _logo_bold(brand_name, tagline, c1, c2):
+    """Full-bleed diagonal gradient, large centered wordmark."""
     S = _LOGO_SIZE
-    img = Image.new('RGB', (S, S), c1)
+    img = Image.new('RGB', (S, S))
+    px = img.load()
+    for yi in range(S):
+        for xi in range(S):
+            t = (xi + yi) / (2 * S - 2)
+            px[xi, yi] = tuple(int(c1[j] + (c2[j] - c1[j]) * t) for j in range(3))
+    overlay = Image.new('RGBA', (S, S), (0, 0, 0, 55))
+    img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
     d = ImageDraw.Draw(img)
-    d.polygon([(S, S), (S, S // 2), (S // 2, S)], fill=tuple(max(0, v - 40) for v in c2))
-    nf = _logo_font(90, bold=True)
+    nf = _logo_font(96, bold=True)
+    tf = _logo_font(44)
     nlines = _wrap(d, brand_name, nf, S - 120)
-    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 14 for l in nlines)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 14 for l in nlines)
+    total_h = name_h
+    tlines = []
     if tagline:
-        lh += 70
-    y = max(80, (S - lh) // 2)
+        tlines = _wrap(d, tagline, tf, S - 160)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 24
+    y = (S - total_h) // 2
     y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 14)
-    if tagline:
-        tf = _logo_font(40)
-        _draw_block(d, _wrap(d, tagline, tf, S - 120), tf, S, y + 20, (230, 230, 230), 8)
+    if tlines:
+        _draw_block(d, tlines, tf, S, y + 24, (235, 235, 245), 8)
     return img
 
 
 def _logo_tech(brand_name, tagline, c1, c2):
+    """Badge: large colored rounded square with initials, wordmark below."""
     S = _LOGO_SIZE
     img = Image.new('RGB', (S, S), _LOGO_BG)
     d = ImageDraw.Draw(img)
     words = brand_name.split()
     initials = ''.join(w[0].upper() for w in words[:2] if w) or brand_name[:2].upper()
-    bf = _logo_font(200, bold=True)
-    inf = _logo_font(170, bold=True)
-    cy = 280
-    d.text((70, cy), "<", fill=c1, font=bf)
-    ib = d.textbbox((0, 0), initials, font=inf)
-    d.text(((S - (ib[2] - ib[0])) // 2, cy + 10), initials, fill=_LOGO_WHITE, font=inf)
-    rb = d.textbbox((0, 0), ">", font=bf)
-    d.text((S - (rb[2] - rb[0]) - 70, cy), ">", fill=c1, font=bf)
-    nf = _logo_font(62, bold=True)
-    y = _draw_block(d, _wrap(d, brand_name, nf, S - 160), nf, S, 618, _LOGO_WHITE, 10)
+    nf = _logo_font(72, bold=True)
+    tf = _logo_font(38)
+    nlines = _wrap(d, brand_name, nf, S - 160)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 10 for l in nlines)
+    badge, gap = 296, 44
+    total_h = badge + gap + name_h
+    tlines = []
     if tagline:
-        tf = _logo_font(36)
-        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, y + 14, c1, 8)
+        tlines = _wrap(d, tagline, tf, S - 200)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 18
+    y = (S - total_h) // 2
+    bx = (S - badge) // 2
+    _rr(d, [bx, y, bx + badge, y + badge], 52, c1)
+    if_ = _logo_font(156, bold=True)
+    ib = d.textbbox((0, 0), initials, font=if_)
+    d.text((bx + (badge - (ib[2] - ib[0])) // 2, y + (badge - (ib[3] - ib[1])) // 2 - 6), initials, fill=_LOGO_WHITE, font=if_)
+    y += badge + gap
+    y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 10)
+    if tlines:
+        _draw_block(d, tlines, tf, S, y + 18, _LOGO_MUTED, 8)
     return img
 
 
 def _logo_gradient(brand_name, tagline, c1, c2):
+    """Horizontal gradient, large wordmark, thin separator, tagline."""
     S = _LOGO_SIZE
     img = Image.new('RGB', (S, S))
+    px = img.load()
+    for yi in range(S):
+        for xi in range(S):
+            t = xi / (S - 1)
+            px[xi, yi] = tuple(int(c1[j] + (c2[j] - c1[j]) * t) for j in range(3))
     d = ImageDraw.Draw(img)
-    for y_px in range(S):
-        t = y_px / (S - 1)
-        d.line([(0, y_px), (S - 1, y_px)], fill=(
-            int(c1[0] + (c2[0] - c1[0]) * t),
-            int(c1[1] + (c2[1] - c1[1]) * t),
-            int(c1[2] + (c2[2] - c1[2]) * t),
-        ))
-    overlay = Image.new('RGBA', (S, S), (0, 0, 0, 90))
-    img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
-    d = ImageDraw.Draw(img)
-    nf = _logo_font(86, bold=True)
+    nf = _logo_font(92, bold=True)
+    tf = _logo_font(42)
     nlines = _wrap(d, brand_name, nf, S - 120)
-    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 14 for l in nlines)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 14 for l in nlines)
+    total_h = name_h + 20
+    tlines = []
     if tagline:
-        lh += 68
-    y = max(80, (S - lh) // 2)
+        tlines = _wrap(d, tagline, tf, S - 160)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 28
+    y = (S - total_h) // 2
     y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 14)
-    if tagline:
-        tf = _logo_font(40)
-        _draw_block(d, _wrap(d, tagline, tf, S - 120), tf, S, y + 20, (230, 230, 240), 8)
+    bar = 160
+    d.rectangle([(S - bar) // 2, y + 8, (S + bar) // 2, y + 13], fill=(220, 220, 230))
+    if tlines:
+        _draw_block(d, tlines, tf, S, y + 30, (240, 240, 250), 8)
     return img
 
 
 def _logo_monogram(brand_name, tagline, c1, c2):
+    """Ring badge: colored ring with initials inside, wordmark below."""
     S = _LOGO_SIZE
     img = Image.new('RGB', (S, S), _LOGO_BG)
     d = ImageDraw.Draw(img)
-    cx, cy, r = S // 2, 350, 210
-    d.ellipse([(cx-r-18, cy-r-18), (cx+r+18, cy+r+18)], fill=tuple(min(255, v // 3) for v in c1))
-    d.ellipse([(cx-r, cy-r), (cx+r, cy+r)], fill=c1)
     words = brand_name.split()
     initials = ''.join(w[0].upper() for w in words[:2] if w) or brand_name[:2].upper()
-    if_ = _logo_font(150, bold=True)
-    ib = d.textbbox((0, 0), initials, font=if_)
-    d.text((cx - (ib[2]-ib[0])//2, cy - (ib[3]-ib[1])//2 - 8), initials, fill=_LOGO_WHITE, font=if_)
     nf = _logo_font(66, bold=True)
-    y = _draw_block(d, _wrap(d, brand_name, nf, S - 160), nf, S, 630, _LOGO_WHITE, 10)
+    tf = _logo_font(38)
+    nlines = _wrap(d, brand_name, nf, S - 160)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 10 for l in nlines)
+    cx = S // 2
+    r_out, r_in = 218, 162
+    total_h = r_out * 2 + 44 + name_h
+    tlines = []
     if tagline:
-        tf = _logo_font(36)
-        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, y + 14, _LOGO_MUTED, 8)
+        tlines = _wrap(d, tagline, tf, S - 200)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 16
+    cy = (S - total_h) // 2 + r_out
+    d.ellipse([(cx - r_out, cy - r_out), (cx + r_out, cy + r_out)], fill=c1)
+    d.ellipse([(cx - r_in, cy - r_in), (cx + r_in, cy + r_in)], fill=_LOGO_BG)
+    if_ = _logo_font(148, bold=True)
+    ib = d.textbbox((0, 0), initials, font=if_)
+    d.text((cx - (ib[2] - ib[0]) // 2, cy - (ib[3] - ib[1]) // 2 - 6), initials, fill=_LOGO_WHITE, font=if_)
+    y = cy + r_out + 44
+    y = _draw_block(d, nlines, nf, S, y, _LOGO_WHITE, 10)
+    if tlines:
+        _draw_block(d, tlines, tf, S, y + 16, _LOGO_MUTED, 8)
     return img
 
 
 def _logo_split(brand_name, tagline, c1, c2):
+    """Vertical color stripe left, chevron notch, wordmark right."""
     S = _LOGO_SIZE
     img = Image.new('RGB', (S, S), _LOGO_BG)
     d = ImageDraw.Draw(img)
-    split_y = S // 2
-    d.rectangle([0, 0, S, split_y], fill=c1)
-    d.polygon([(0, split_y), (S // 3, split_y), (0, split_y + S // 5)], fill=c2)
+    stripe_w = 200
+    d.rectangle([0, 0, stripe_w, S], fill=c1)
+    notch = 70
+    d.polygon([(stripe_w, S // 2 - notch), (stripe_w + notch, S // 2), (stripe_w, S // 2 + notch)], fill=_LOGO_BG)
     nf = _logo_font(80, bold=True)
-    nlines = _wrap(d, brand_name, nf, S - 120)
-    lh = sum((d.textbbox((0,0), l, font=nf)[3] - d.textbbox((0,0), l, font=nf)[1]) + 12 for l in nlines)
-    y = split_y - lh // 2 - 20
+    tf = _logo_font(40)
+    text_x = stripe_w + 80
+    max_w = S - text_x - 60
+    nlines = _wrap(d, brand_name, nf, max_w)
+    name_h = sum(d.textbbox((0, 0), l, font=nf)[3] - d.textbbox((0, 0), l, font=nf)[1] + 12 for l in nlines)
+    tlines = []
+    total_h = name_h
+    if tagline:
+        tlines = _wrap(d, tagline, tf, max_w)
+        total_h += sum(d.textbbox((0, 0), l, font=tf)[3] - d.textbbox((0, 0), l, font=tf)[1] + 8 for l in tlines) + 20
+    y = (S - total_h) // 2
     for line in nlines:
-        x = _tcx(d, line, nf, S)
-        for dx, dy in [(-2,-2),(2,-2),(-2,2),(2,2)]:
-            d.text((x+dx, y+dy), line, fill=_LOGO_BG, font=nf)
-        d.text((x, y), line, fill=_LOGO_WHITE, font=nf)
+        d.text((text_x, y), line, fill=_LOGO_WHITE, font=nf)
         bb = d.textbbox((0, 0), line, font=nf)
         y += (bb[3] - bb[1]) + 12
-    if tagline:
-        tf = _logo_font(38)
-        _draw_block(d, _wrap(d, tagline, tf, S - 160), tf, S, split_y + 64, _LOGO_MUTED, 8)
+    if tlines:
+        y += 20
+        for line in tlines:
+            d.text((text_x, y), line, fill=_LOGO_MUTED, font=tf)
+            bb = d.textbbox((0, 0), line, font=tf)
+            y += (bb[3] - bb[1]) + 8
     return img
 
 
