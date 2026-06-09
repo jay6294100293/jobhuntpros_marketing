@@ -30,8 +30,8 @@ services:
       - CORS_ORIGINS=https://launchbusinessai.com,https://www.launchbusinessai.com
     depends_on:
       - mongo
-    expose:
-      - "8001"
+    ports:
+      - "127.0.0.1:8001:8001"
     volumes:
       - backend_outputs:/app/outputs
       - backend_uploads:/app/uploads
