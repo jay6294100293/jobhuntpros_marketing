@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Zap, FileText, Image, Video, ArrowRight, Check,
+  Sparkles, Zap, FileText, Image, Video, ArrowRight, Check,
   Palette, Scale, MessageSquare, Shield, Briefcase, Users,
   Globe, Wand2, Mic, Download, RefreshCw, ChevronRight, MonitorPlay, Chrome
 } from 'lucide-react';
@@ -112,11 +112,11 @@ export function Landing() {
 
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5">
-        <Link to="/" className="flex items-center gap-2.5 no-underline">
-          <div style={{ height: 36, overflow: 'hidden', flexShrink: 0 }}>
-            <img src="/logo.png" alt="" style={{ height: 58 }} />
+        <Link to="/" className="flex items-center gap-2 no-underline">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px', color: '#fff' }}>LaunchBusiness AI</span>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>LaunchBusiness AI</span>
         </Link>
         <div className="hidden md:flex items-center gap-6 text-sm text-zinc-400">
           <a href="#features" className="hover:text-white transition-colors no-underline">Features</a>
@@ -524,8 +524,8 @@ export function Landing() {
       {/* ── Footer ── */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '24px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div className="flex items-center gap-2">
-          <div style={{ height: 24, overflow: 'hidden', flexShrink: 0 }}>
-            <img src="/logo.png" alt="" style={{ height: 38 }} />
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+            <Sparkles className="w-3 h-3 text-white" />
           </div>
           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14, color: '#52525b' }}>LaunchBusiness AI</span>
         </div>
