@@ -211,6 +211,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # Auto-expire coupon-granted tier (only for users without an active Stripe subscription)
+    if user.get("tier_expires_at") and not user.get("stripe_customer_id"):
+        try:
+            exp = datetime.fromisoformat(user["tier_expires_at"])
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"tier": "free", "tier_expires_at": None}}
+                )
+                user["tier"] = "free"
+                user["tier_expires_at"] = None
+        except Exception:
+            pass
     return user
 
 async def get_optional_user(credentials: HTTPAuthorizationCredentials = Security(security_scheme)):
@@ -571,6 +586,16 @@ class BetaAccessRequest(BaseModel):
 
 class ApproveBetaUserRequest(BaseModel):
     email: str
+
+class CreateCouponRequest(BaseModel):
+    code: str           = Field(max_length=50)
+    tier: str           = Field(default="pro")
+    duration_days: int  = Field(default=30)   # 0 = permanent
+    max_uses: int       = Field(default=0)    # 0 = unlimited
+    note: Optional[str] = Field(default=None, max_length=200)
+
+class RedeemCouponRequest(BaseModel):
+    code: str = Field(max_length=50)
 
 class LoginRequest(BaseModel):
     email: str
@@ -3499,6 +3524,62 @@ async def list_beta_waitlist(request: Request):
     return {"count": len(entries), "entries": entries}
 
 
+@admin_router.post("/create-coupon", status_code=201)
+async def create_coupon(req: CreateCouponRequest, request: Request):
+    """
+    Create a gift/promo coupon code.
+    Requires X-Admin-Secret header.
+
+    Example:
+      curl -X POST https://launchbusinessai.com/admin/create-coupon \\
+        -H "X-Admin-Secret: YOUR_SECRET" -H "Content-Type: application/json" \\
+        -d '{"code":"TESTER01","tier":"pro","duration_days":30,"max_uses":5,"note":"Beta tester"}'
+    """
+    _require_admin(request)
+    code = req.code.strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code cannot be empty")
+    if req.tier not in ("starter", "pro", "agency"):
+        raise HTTPException(status_code=400, detail="tier must be starter, pro, or agency")
+    existing = await db.coupons.find_one({"code": code})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Coupon '{code}' already exists")
+    coupon = {
+        "code":          code,
+        "tier":          req.tier,
+        "duration_days": req.duration_days,
+        "max_uses":      req.max_uses,
+        "used_count":    0,
+        "used_by":       [],
+        "is_active":     True,
+        "note":          req.note,
+        "created_at":    datetime.now(timezone.utc).isoformat(),
+    }
+    await db.coupons.insert_one({**coupon, "_id": code})
+    return coupon
+
+
+@admin_router.get("/coupons")
+async def list_coupons(request: Request):
+    """List all coupon codes. Requires X-Admin-Secret header."""
+    _require_admin(request)
+    coupons = await db.coupons.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"count": len(coupons), "coupons": coupons}
+
+
+@admin_router.delete("/coupons/{code}")
+async def deactivate_coupon(code: str, request: Request):
+    """Deactivate a coupon (does not delete). Requires X-Admin-Secret header."""
+    _require_admin(request)
+    result = await db.coupons.update_one(
+        {"code": code.upper()},
+        {"$set": {"is_active": False}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+    return {"deactivated": code.upper()}
+
+
 # ── Billing Router ─────────────────────────────────────────────────────────────
 billing_router = APIRouter(prefix="/api/billing")
 
@@ -3617,6 +3698,44 @@ async def stripe_webhook_handler(request: Request):
             logger.info(f"Subscription ended: {customer_id} downgraded to free")
 
     return {"status": "ok"}
+
+@billing_router.post("/redeem-coupon")
+async def redeem_coupon(req: RedeemCouponRequest, user=Depends(get_current_user)):
+    """Redeem a gift/promo coupon code to upgrade the current user's tier."""
+    code = req.code.strip().upper()
+    coupon = await db.coupons.find_one({"code": code})
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Invalid coupon code. Check your code and try again.")
+    if not coupon.get("is_active", True):
+        raise HTTPException(status_code=400, detail="This coupon has been deactivated.")
+    max_uses = coupon.get("max_uses", 0)
+    if max_uses > 0 and coupon.get("used_count", 0) >= max_uses:
+        raise HTTPException(status_code=400, detail="This coupon has reached its usage limit.")
+    if user["id"] in coupon.get("used_by", []):
+        raise HTTPException(status_code=400, detail="You have already redeemed this coupon.")
+
+    tier          = coupon.get("tier", "pro")
+    duration_days = coupon.get("duration_days", 30)
+    tier_expires_at = None
+    if duration_days > 0:
+        tier_expires_at = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat()
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"tier": tier, "tier_expires_at": tier_expires_at}}
+    )
+    await db.coupons.update_one(
+        {"code": code},
+        {"$inc": {"used_count": 1}, "$push": {"used_by": user["id"]}}
+    )
+
+    if duration_days > 0:
+        msg = f"Coupon applied! You now have {tier.capitalize()} access for {duration_days} days."
+    else:
+        msg = f"Coupon applied! You now have {tier.capitalize()} access (permanent)."
+
+    return {"tier": tier, "duration_days": duration_days, "tier_expires_at": tier_expires_at, "message": msg}
+
 
 @billing_router.get("/portal")
 async def billing_portal(user = Depends(get_current_user)):

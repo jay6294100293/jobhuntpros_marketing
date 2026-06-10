@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Check, Zap, Loader2 } from 'lucide-react';
+import { Check, Zap, Loader2, Gift, Tag } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -81,9 +81,36 @@ const plans = [
 ];
 
 export const Pricing = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(null);
+  const [loading, setLoading]         = useState(null);
+  const [couponCode, setCouponCode]   = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponResult, setCouponResult]   = useState(null);
+
+  const handleRedeemCoupon = async () => {
+    if (!user) { navigate('/login'); return; }
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponResult(null);
+    try {
+      const res = await axios.post(
+        `${BACKEND_URL}/api/billing/redeem-coupon`,
+        { code: couponCode.trim() },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('jhp_token')}` } }
+      );
+      setCouponResult({ type: 'success', message: res.data.message });
+      toast.success(res.data.message);
+      await refreshUser();
+      setCouponCode('');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Invalid coupon code';
+      setCouponResult({ type: 'error', message: msg });
+      toast.error(msg);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
 
   const handleUpgrade = async (plan) => {
     if (!user) { navigate('/register'); return; }
@@ -177,6 +204,48 @@ export const Pricing = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* Coupon / gift code redemption */}
+      <div className="mt-10 max-w-md mx-auto">
+        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Gift className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-sm font-semibold text-zinc-200">Have a gift or promo code?</h3>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={couponCode}
+              onChange={e => setCouponCode(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && handleRedeemCoupon()}
+              placeholder="Enter code (e.g. TESTER01)"
+              className="flex-1 bg-zinc-800/60 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 text-sm tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 placeholder-zinc-500 placeholder:tracking-normal placeholder:font-sans"
+            />
+            <button
+              onClick={handleRedeemCoupon}
+              disabled={couponLoading || !couponCode.trim()}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap"
+            >
+              {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
+              Apply
+            </button>
+          </div>
+          {couponResult && (
+            <div className={`mt-3 p-3 rounded-lg border text-sm ${
+              couponResult.type === 'success'
+                ? 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+                : 'bg-red-950/40 border-red-800/40 text-red-300'
+            }`}>
+              {couponResult.message}
+            </div>
+          )}
+          {user?.tier_expires_at && (
+            <p className="text-xs text-amber-400 mt-3">
+              Your current plan expires on {new Date(user.tier_expires_at).toLocaleDateString()}.
+            </p>
+          )}
+        </div>
       </div>
 
       <p className="text-center text-xs text-zinc-600 mt-8">
