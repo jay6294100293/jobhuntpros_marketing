@@ -111,13 +111,13 @@ ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 
 # Tier limits — "lifetime": True means total-ever, False means per-calendar-month
 TIER_CONFIG = {
-    "free":    {"videos": 3,   "scripts": 5,   "posters": 5,   "lifetime": True,  "formats": ["9:16"]},
-    "starter": {"videos": 15,  "scripts": 50,  "posters": 50,  "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
-    "pro":     {"videos": 50,  "scripts": 200, "posters": 200, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
-    "agency":  {"videos": 200, "scripts": 999, "posters": 999, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
+    "free":    {"videos": 3,   "scripts": 5,   "posters": 5,   "logos": 3,   "lifetime": True,  "formats": ["9:16"]},
+    "starter": {"videos": 15,  "scripts": 50,  "posters": 50,  "logos": 25,  "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
+    "pro":     {"videos": 50,  "scripts": 200, "posters": 200, "logos": 100, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
+    "agency":  {"videos": 200, "scripts": 999, "posters": 999, "logos": 999, "lifetime": False, "formats": ["9:16", "16:9", "1:1", "4:5"]},
 }
 # Keep for backward compat (used in /me endpoint)
-FREE_TIER_LIMITS = {"scripts": 5, "videos": 3, "posters": 5}
+FREE_TIER_LIMITS = {"scripts": 5, "videos": 3, "posters": 5, "logos": 3}
 
 STRIPE_STARTER_PRICE_ID = os.getenv('STRIPE_STARTER_PRICE_ID', '')
 STRIPE_AGENCY_PRICE_ID = os.getenv('STRIPE_AGENCY_PRICE_ID', '')
@@ -4246,7 +4246,8 @@ async def _call_ideogram(brand_name: str, tagline: str, primary_color: str, styl
 
 
 @api_router.post("/generate-logo")
-async def generate_logo(request: LogoGenerateRequest, user=Depends(get_optional_user)):
+async def generate_logo(request: LogoGenerateRequest, user=Depends(get_current_user)):
+    await check_usage_limit(user, "logos")
     primary_rgb = _hex_to_rgb(request.primary_color)
     secondary_rgb = _hex_to_rgb(request.secondary_color)
 
@@ -4277,6 +4278,7 @@ async def generate_logo(request: LogoGenerateRequest, user=Depends(get_optional_
             request.brand_name, request.tagline or "", request.primary_color, request.style
         )
 
+    await increment_usage(user["id"], "logos")
     return {"templates": templates, "ai_concepts": ai_concepts, "ai_available": bool(IDEOGRAM_API_KEY)}
 
 

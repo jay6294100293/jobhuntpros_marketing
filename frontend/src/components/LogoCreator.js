@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Palette, Wand2, Download, Check, Loader2, Sparkles, LayoutTemplate, Cpu, Briefcase, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Palette, Wand2, Download, Check, Loader2, Sparkles, LayoutTemplate, Cpu, Briefcase, Star, Lock } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -77,6 +78,13 @@ export const LogoCreator = () => {
     }
   };
 
+  const handleSelect = async (logo) => {
+    setSelected(logo);
+    if (selectedProfile) {
+      await handleSetActiveLogo(logo.url);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!brandName.trim()) { toast.error('Brand name is required'); return; }
     setLoading(true);
@@ -90,7 +98,7 @@ export const LogoCreator = () => {
         secondary_color: secondaryColor,
         style,
         mode,
-      });
+      }, { headers: { Authorization: `Bearer ${token()}` } });
       setResults(data);
       const total = (data.templates?.length || 0) + (data.ai_concepts?.length || 0);
       toast.success(`${total} logo${total !== 1 ? 's' : ''} generated`);
@@ -140,7 +148,7 @@ export const LogoCreator = () => {
         <div className="lg:col-span-1 space-y-4">
 
           {/* Brand profile selector */}
-          {canUseBrands && (
+          {canUseBrands ? (
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Brand Profile</h2>
@@ -152,7 +160,7 @@ export const LogoCreator = () => {
                 )}
               </div>
               {selectedProfile ? (
-                <div className="flex items-center gap-2 p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/8">
+                <div className="flex items-center gap-2 p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
                   <div className="flex gap-1">
                     <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.primary_color }} />
                     <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.secondary_color }} />
@@ -169,11 +177,29 @@ export const LogoCreator = () => {
                   Select a brand profile (auto-fills fields)
                 </button>
               )}
+              {selectedProfile && (
+                <p className="text-xs text-emerald-500 mt-2">
+                  Clicking a logo will save it to this profile automatically.
+                </p>
+              )}
               {showProfiles && (
                 <div className="mt-3">
                   <BrandProfiles compact selectedId={selectedProfile?.id} onSelect={handleProfileSelect} />
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Lock className="w-4 h-4 text-zinc-600" />
+                <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Brand Profile</h2>
+              </div>
+              <p className="text-xs text-zinc-600 mb-3">
+                Save logos to your brand so they auto-appear in videos, posters, and legal docs.
+              </p>
+              <Link to="/pricing" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                Upgrade to Starter to unlock →
+              </Link>
             </div>
           )}
 
@@ -291,7 +317,7 @@ export const LogoCreator = () => {
                     {results.templates.map(logo => (
                       <LogoCard key={logo.id} logo={logo}
                                 isSelected={selected?.id === logo.id}
-                                onSelect={() => setSelected(logo)}
+                                onSelect={() => handleSelect(logo)}
                                 onDownload={() => handleDownload(logo.url, `${safeName}-${logo.template}.png`)}
                                 backendUrl={BACKEND_URL} />
                     ))}
@@ -308,7 +334,7 @@ export const LogoCreator = () => {
                     {results.ai_concepts.map(logo => (
                       <LogoCard key={logo.id} logo={logo}
                                 isSelected={selected?.id === logo.id}
-                                onSelect={() => setSelected(logo)}
+                                onSelect={() => handleSelect(logo)}
                                 onDownload={() => handleDownload(logo.url, `${safeName}-ai-${logo.id.slice(0, 6)}.png`)}
                                 backendUrl={BACKEND_URL} isAI />
                     ))}
@@ -330,27 +356,29 @@ export const LogoCreator = () => {
                     >
                       <Download className="w-4 h-4" /> Download 1024×1024
                     </button>
-                    <button
-                      onClick={() => handleSetActiveLogo(selected.url)}
-                      disabled={settingLogo}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors active:scale-95 border"
-                      style={{
-                        background: selectedProfile ? 'rgba(16,185,129,0.1)' : 'rgba(39,39,42,0.6)',
-                        borderColor: selectedProfile ? 'rgba(16,185,129,0.3)' : 'rgba(63,63,70,1)',
-                        color: selectedProfile ? '#6ee7b7' : '#71717a',
-                      }}
-                    >
-                      {settingLogo
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <Star className="w-4 h-4" />}
-                      {selectedProfile
-                        ? `Set as logo for "${selectedProfile.brand_name}"`
-                        : 'Set as active logo (select a profile first)'}
-                    </button>
+                    {canUseBrands && (
+                      <button
+                        onClick={() => handleSetActiveLogo(selected.url)}
+                        disabled={settingLogo || !selectedProfile}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors active:scale-95 border disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{
+                          background: selectedProfile ? 'rgba(16,185,129,0.1)' : 'rgba(39,39,42,0.6)',
+                          borderColor: selectedProfile ? 'rgba(16,185,129,0.3)' : 'rgba(63,63,70,1)',
+                          color: selectedProfile ? '#6ee7b7' : '#71717a',
+                        }}
+                      >
+                        {settingLogo
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Star className="w-4 h-4" />}
+                        {selectedProfile
+                          ? `Save to "${selectedProfile.brand_name}"`
+                          : 'Select a profile above first'}
+                      </button>
+                    )}
                   </div>
-                  {!selectedProfile && canUseBrands && (
+                  {canUseBrands && !selectedProfile && (
                     <p className="text-xs text-zinc-600">
-                      Select a brand profile above to save this logo — it will automatically appear on your video slides and posters.
+                      Select a brand profile above — clicking a logo will save it automatically.
                     </p>
                   )}
                 </div>
