@@ -30,8 +30,8 @@ const ProtectedApp = () => {
   if (loading) return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-8">
       <div className="absolute pointer-events-none" style={{ width: 500, height: 500, background: 'radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 22, color: '#fff', letterSpacing: '-0.5px' }}>LB</span>
+      <div style={{ background: '#fff', borderRadius: 20, padding: '20px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+        <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: 180, height: 'auto', display: 'block' }} />
       </div>
       <div className="flex items-center gap-2">
         {[0, 150, 300].map((delay, i) => (

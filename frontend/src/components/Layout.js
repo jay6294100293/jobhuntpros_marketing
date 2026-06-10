@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, Home, Upload, Wand2, FolderOpen, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone } from 'lucide-react';
+import { Home, Upload, Wand2, FolderOpen, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -34,9 +34,14 @@ export const Layout = ({ children }) => {
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2" data-testid="app-title">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                <Sparkles className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-2.5" data-testid="app-title">
+              {/* Logo mark only — crop to top portion so dark tagline text stays hidden */}
+              <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', background: '#fff', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
+                <img
+                  src="/logo.png"
+                  alt="LaunchBusiness AI"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }}
+                />
               </div>
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>LaunchBusiness AI</span>
             </div>
