@@ -43,7 +43,7 @@ function DocumentRow({ doc, isSelected, onClick }) {
 function DocumentViewer({ doc, onRegenerate, onClose }) {
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(doc.content);
@@ -199,7 +199,7 @@ export default function DocumentVault({ profile }) {
   const [loading, setLoading] = useState(true);
   const [loadingDoc, setLoadingDoc] = useState(false);
   const [showMobile, setShowMobile] = useState(false);
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
 
   useEffect(() => {
     const load = async () => {

@@ -307,7 +307,7 @@ export function BrandProfiles({ onSelect, selectedId, compact = false }) {
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(null);
 
-  const token = () => localStorage.getItem('token');
+  const token = () => localStorage.getItem('jhp_token');
   const auth  = () => ({ headers: { Authorization: `Bearer ${token()}` } });
 
   const load = useCallback(async () => {

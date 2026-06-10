@@ -37,7 +37,7 @@ export default function LegalDocs() {
     () => localStorage.getItem('legal_disclaimer_accepted') === '1'
   );
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {

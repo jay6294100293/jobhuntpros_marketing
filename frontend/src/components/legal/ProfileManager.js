@@ -20,7 +20,7 @@ export default function ProfileManager({ profiles, onSelect, onCreated, onDelete
     if (!newName.trim()) return;
     setBusy(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('jhp_token');
       const res = await axios.post(
         `${API}/api/legal/profiles`,
         { name: newName.trim() },
@@ -40,7 +40,7 @@ export default function ProfileManager({ profiles, onSelect, onCreated, onDelete
   const handleDelete = async (profileId, profileName) => {
     setBusy(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('jhp_token');
       await axios.delete(`${API}/api/legal/profiles/${profileId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });

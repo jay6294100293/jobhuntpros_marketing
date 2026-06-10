@@ -32,7 +32,7 @@ export default function DocumentCatalog({ profile, user, onGenerate, onBuyCredit
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
   const headers = { Authorization: `Bearer ${token}` };
   const canGenerate = user?.tier !== 'free';
 

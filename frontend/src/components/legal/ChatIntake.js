@@ -69,7 +69,7 @@ export default function ChatIntake({ profile, onIntakeComplete }) {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
   const headers = { Authorization: `Bearer ${token}` };
 
   // Load existing history or start fresh

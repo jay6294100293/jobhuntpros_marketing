@@ -9,7 +9,7 @@ export default function TopupModal({ onClose }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(null); // pkg id being purchased
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jhp_token');
 
   useEffect(() => {
     const load = async () => {
