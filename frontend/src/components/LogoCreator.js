@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Palette, Wand2, Download, Check, Loader2, Sparkles, LayoutTemplate, Cpu, Briefcase, Star, Lock } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
-import { BrandProfiles } from './BrandProfiles';
+import { useBrand } from '../context/BrandContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -27,7 +26,7 @@ const MODES = [
 const inputCls = "w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-2.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600";
 
 export const LogoCreator = () => {
-  const { user } = useAuth();
+  const { activeBrand, canUseBrands } = useBrand();
   const [brandName, setBrandName]           = useState('');
   const [tagline, setTagline]               = useState('');
   const [primaryColor, setPrimaryColor]     = useState('#6366f1');
@@ -37,40 +36,33 @@ export const LogoCreator = () => {
   const [loading, setLoading]               = useState(false);
   const [results, setResults]               = useState(null);
   const [selected, setSelected]             = useState(null);
-
-  // Brand profile integration
-  const [showProfiles, setShowProfiles]     = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState(null);
   const [settingLogo, setSettingLogo]       = useState(false);
 
-  const canUseBrands = user?.tier && user.tier !== 'free';
-  const token = () => localStorage.getItem('token');
+  const token = () => localStorage.getItem('jhp_token');
 
-  const handleProfileSelect = (profile) => {
-    setSelectedProfile(profile);
-    setShowProfiles(false);
-    if (!profile) return;
-    if (profile.brand_name)      setBrandName(profile.brand_name);
-    if (profile.tagline)         setTagline(profile.tagline);
-    if (profile.primary_color)   setPrimaryColor(profile.primary_color);
-    if (profile.secondary_color) setSecondaryColor(profile.secondary_color);
-    toast.success(`Profile loaded: ${profile.brand_name}`);
-  };
+  // Auto-fill brand fields whenever the app-wide active brand changes
+  useEffect(() => {
+    if (!activeBrand) return;
+    if (activeBrand.brand_name)      setBrandName(activeBrand.brand_name);
+    if (activeBrand.tagline)         setTagline(activeBrand.tagline);
+    if (activeBrand.primary_color)   setPrimaryColor(activeBrand.primary_color);
+    if (activeBrand.secondary_color) setSecondaryColor(activeBrand.secondary_color);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id]);
 
   const handleSetActiveLogo = async (logoUrl) => {
-    if (!selectedProfile) {
-      toast.error('Select a brand profile first to save this logo');
-      setShowProfiles(true);
+    if (!activeBrand) {
+      toast.error('Pick a brand from the switcher in the navbar first');
       return;
     }
     setSettingLogo(true);
     try {
       await axios.post(
-        `${BACKEND_URL}/api/brand-profiles/${selectedProfile.id}/set-logo`,
+        `${BACKEND_URL}/api/brand-profiles/${activeBrand.id}/set-logo`,
         { logo_url: logoUrl },
         { headers: { Authorization: `Bearer ${token()}` } }
       );
-      toast.success(`Logo saved to "${selectedProfile.brand_name}" — it will now appear on your video slides and posters`);
+      toast.success(`Logo saved to "${activeBrand.brand_name}" — it will now appear on your video slides and posters`);
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to save logo');
     } finally {
@@ -80,7 +72,7 @@ export const LogoCreator = () => {
 
   const handleSelect = async (logo) => {
     setSelected(logo);
-    if (selectedProfile) {
+    if (activeBrand) {
       await handleSetActiveLogo(logo.url);
     }
   };
@@ -147,46 +139,36 @@ export const LogoCreator = () => {
         {/* ── Left panel: controls ── */}
         <div className="lg:col-span-1 space-y-4">
 
-          {/* Brand profile selector */}
+          {/* Active brand status */}
           {canUseBrands ? (
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Brand Profile</h2>
-                {selectedProfile && (
-                  <button onClick={() => handleProfileSelect(null)}
-                          className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-                    Clear
-                  </button>
-                )}
-              </div>
-              {selectedProfile ? (
-                <div className="flex items-center gap-2 p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
-                  <div className="flex gap-1">
-                    <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.primary_color }} />
-                    <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.secondary_color }} />
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Active Brand</h2>
+              {activeBrand ? (
+                <>
+                  <div className="flex items-center gap-2 p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
+                    <div className="flex gap-1">
+                      <span className="w-3 h-3 rounded-full" style={{ background: activeBrand.primary_color }} />
+                      <span className="w-3 h-3 rounded-full" style={{ background: activeBrand.secondary_color }} />
+                    </div>
+                    <span className="text-sm text-indigo-300 font-medium flex-1 truncate">{activeBrand.brand_name}</span>
+                    <Check className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
                   </div>
-                  <span className="text-sm text-indigo-300 font-medium flex-1 truncate">{selectedProfile.brand_name}</span>
-                  <Check className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                </div>
+                  <p className="text-xs text-emerald-500 mt-2">
+                    Fields auto-filled from this brand. Clicking a logo will save it here automatically.
+                  </p>
+                </>
               ) : (
-                <button
-                  onClick={() => setShowProfiles(v => !v)}
+                <Link
+                  to="/brands"
                   className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-zinc-700 hover:border-zinc-500 text-sm text-zinc-500 hover:text-zinc-300 transition-all"
                 >
                   <Briefcase className="w-4 h-4" />
-                  Select a brand profile (auto-fills fields)
-                </button>
+                  Create a brand profile to auto-fill & save logos
+                </Link>
               )}
-              {selectedProfile && (
-                <p className="text-xs text-emerald-500 mt-2">
-                  Clicking a logo will save it to this profile automatically.
-                </p>
-              )}
-              {showProfiles && (
-                <div className="mt-3">
-                  <BrandProfiles compact selectedId={selectedProfile?.id} onSelect={handleProfileSelect} />
-                </div>
-              )}
+              <Link to="/brands" className="block text-xs text-zinc-600 hover:text-zinc-400 mt-2 transition-colors">
+                Manage brands →
+              </Link>
             </div>
           ) : (
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5">
@@ -359,26 +341,26 @@ export const LogoCreator = () => {
                     {canUseBrands && (
                       <button
                         onClick={() => handleSetActiveLogo(selected.url)}
-                        disabled={settingLogo || !selectedProfile}
+                        disabled={settingLogo || !activeBrand}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors active:scale-95 border disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{
-                          background: selectedProfile ? 'rgba(16,185,129,0.1)' : 'rgba(39,39,42,0.6)',
-                          borderColor: selectedProfile ? 'rgba(16,185,129,0.3)' : 'rgba(63,63,70,1)',
-                          color: selectedProfile ? '#6ee7b7' : '#71717a',
+                          background: activeBrand ? 'rgba(16,185,129,0.1)' : 'rgba(39,39,42,0.6)',
+                          borderColor: activeBrand ? 'rgba(16,185,129,0.3)' : 'rgba(63,63,70,1)',
+                          color: activeBrand ? '#6ee7b7' : '#71717a',
                         }}
                       >
                         {settingLogo
                           ? <Loader2 className="w-4 h-4 animate-spin" />
                           : <Star className="w-4 h-4" />}
-                        {selectedProfile
-                          ? `Save to "${selectedProfile.brand_name}"`
-                          : 'Select a profile above first'}
+                        {activeBrand
+                          ? `Save to "${activeBrand.brand_name}"`
+                          : 'Pick a brand above first'}
                       </button>
                     )}
                   </div>
-                  {canUseBrands && !selectedProfile && (
+                  {canUseBrands && !activeBrand && (
                     <p className="text-xs text-zinc-600">
-                      Select a brand profile above — clicking a logo will save it automatically.
+                      Pick a brand from the switcher in the navbar — clicking a logo will save it automatically.
                     </p>
                   )}
                 </div>

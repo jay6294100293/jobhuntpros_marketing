@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
+import { BrandProvider } from './context/BrandContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -21,6 +22,7 @@ import { LogoCreator } from './components/LogoCreator';
 import LegalDocs from './components/LegalDocs';
 import { BrandProfiles } from './components/BrandProfiles';
 import { TutorialStudio } from './components/TutorialStudio';
+import { MarketingLayout } from './components/MarketingLayout';
 import './App.css';
 
 // Wraps all authenticated routes — shows landing page or app depending on auth.
@@ -53,10 +55,10 @@ const ProtectedApp = () => {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/assets" element={<AssetUpload />} />
-        <Route path="/scripts" element={<ScriptGenerator />} />
-        <Route path="/create" element={<CreateContent />} />
-        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/assets" element={<MarketingLayout><AssetUpload /></MarketingLayout>} />
+        <Route path="/scripts" element={<MarketingLayout><ScriptGenerator /></MarketingLayout>} />
+        <Route path="/create" element={<MarketingLayout><CreateContent /></MarketingLayout>} />
+        <Route path="/gallery" element={<MarketingLayout><Gallery /></MarketingLayout>} />
         <Route path="/logo" element={<LogoCreator />} />
         <Route path="/legal" element={<LegalDocs />} />
         <Route path="/brands" element={<BrandProfiles />} />
@@ -72,25 +74,27 @@ function App() {
     <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Login register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/*" element={<ProtectedApp />} />
-        </Routes>
-        <Toaster
-          position="top-right"
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: '#18181b',
-              color: '#fafafa',
-              border: '1px solid #27272a',
-            },
-          }}
-        />
+        <BrandProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Login register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/*" element={<ProtectedApp />} />
+          </Routes>
+          <Toaster
+            position="top-right"
+            theme="dark"
+            toastOptions={{
+              style: {
+                background: '#18181b',
+                color: '#fafafa',
+                border: '1px solid #27272a',
+              },
+            }}
+          />
+        </BrandProvider>
       </AuthProvider>
     </BrowserRouter>
     </ErrorBoundary>

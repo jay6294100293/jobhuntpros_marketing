@@ -1,10 +1,10 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, ChevronRight, Palette, Scale, Megaphone, ArrowRight, ImageIcon } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, Palette, Scale, Megaphone, ArrowRight } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { BrandProfiles } from './BrandProfiles';
+import { useBrand } from '../context/BrandContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -27,9 +27,6 @@ export const Dashboard = () => {
   const [targetAudience, setTargetAudience] = useState('');
   const [creativeDirection, setCreativeDirection] = useState('');
   const [showCreative, setShowCreative] = useState(false);
-  const [showBrands, setShowBrands] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState(null);
-  const [hubProfile, setHubProfile] = useState(null);  // most recent profile — for hub display only
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [usedCreative, setUsedCreative] = useState(false);
@@ -39,33 +36,21 @@ export const Dashboard = () => {
   const timerRef = useRef(null);
   const stepTimerRef = useRef(null);
   const startTimeRef = useRef(null);
+  const [savingBrand, setSavingBrand] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeBrand, canUseBrands, selectBrand, refreshProfiles } = useBrand();
   const canUseCreative = user?.tier && user.tier !== 'free';
-  const canUseBrands   = user?.tier && user.tier !== 'free';
 
-  // Load most recent brand profile for hub status display (doesn't auto-fill the form)
+  // Auto-fill the launch form whenever the app-wide active brand changes
   useEffect(() => {
-    if (!user || user.tier === 'free') return;
-    const token = localStorage.getItem('jhp_token');
-    if (!token) return;
-    axios.get(`${BACKEND_URL}/api/brand-profiles`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(res => {
-      const profiles = res.data?.profiles || [];
-      if (profiles.length > 0) setHubProfile(profiles[0]);
-    }).catch(() => {});
-  }, [user]);
+    if (!activeBrand) return;
+    if (activeBrand.brand_name) setProductName(activeBrand.brand_name);
+    if (activeBrand.url)        setUrl(activeBrand.url);
+    if (activeBrand.audience)   setTargetAudience(activeBrand.audience);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id]);
 
-  const handleProfileSelect = (profile) => {
-    setSelectedProfile(profile);
-    setShowBrands(false);
-    if (!profile) return;
-    if (profile.brand_name) setProductName(profile.brand_name);
-    if (profile.url)        setUrl(profile.url);
-    if (profile.audience)   setTargetAudience(profile.audience);
-    setHubProfile(profile);  // keep hub in sync when user picks a profile
-  };
   const hasFreeTrial = user && !user.free_pro_trial_used;
 
   const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
@@ -129,7 +114,7 @@ export const Dashboard = () => {
         product_name: productName,
         target_audience: targetAudience,
         ...(hasCreative ? { creative_direction: creativeDirection.trim() } : {}),
-        ...(selectedProfile ? { profile_id: selectedProfile.id } : {}),
+        ...(activeBrand ? { profile_id: activeBrand.id } : {}),
       });
 
       setProgress(100);
@@ -144,12 +129,40 @@ export const Dashboard = () => {
       setLoading(false);
     }
   };
-  
-  const displayProfile = selectedProfile || hubProfile;
-  const backendLogoSrc = displayProfile?.active_logo_url
-    ? (displayProfile.active_logo_url.startsWith('http')
-        ? displayProfile.active_logo_url
-        : `${BACKEND_URL}${displayProfile.active_logo_url}`)
+
+  // One-click: turn this launch's inputs + scraped colors/features into a reusable brand profile
+  const handleSaveAsBrand = async () => {
+    const token = localStorage.getItem('jhp_token');
+    if (!token) return;
+    setSavingBrand(true);
+    try {
+      const brandData = results?.brand_data || {};
+      const payload = {
+        brand_name: productName,
+        tagline: (brandData.description || '').slice(0, 100),
+        url,
+        primary_color: brandData.colors?.[0] || '#6366f1',
+        secondary_color: brandData.colors?.[1] || '#8b5cf6',
+        audience: targetAudience,
+        key_features: (brandData.features || []).slice(0, 3),
+      };
+      const { data } = await axios.post(`${BACKEND_URL}/api/brand-profiles`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await refreshProfiles();
+      selectBrand(data);
+      toast.success(`Saved as brand "${data.brand_name}" — now active across Logo, Marketing & Legal`);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to save brand profile');
+    } finally {
+      setSavingBrand(false);
+    }
+  };
+
+  const backendLogoSrc = activeBrand?.active_logo_url
+    ? (activeBrand.active_logo_url.startsWith('http')
+        ? activeBrand.active_logo_url
+        : `${BACKEND_URL}${activeBrand.active_logo_url}`)
     : null;
 
   return (
@@ -234,48 +247,25 @@ export const Dashboard = () => {
         <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           <div className="space-y-6">
 
-            {/* Brand Profile selector — Starter+ only */}
+            {/* Active brand indicator — Starter+ only */}
             {canUseBrands && (
-              <div>
-                <button
-                  onClick={() => setShowBrands(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-all"
-                  style={{
-                    background: selectedProfile ? 'rgba(99,102,241,0.08)' : 'rgba(39,39,42,0.5)',
-                    borderColor: selectedProfile ? 'rgba(99,102,241,0.4)' : 'rgba(63,63,70,1)',
-                  }}
+              activeBrand ? (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-indigo-500/30 bg-indigo-500/5">
+                  <Briefcase className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                  <span className="text-sm text-zinc-300">
+                    Using brand <span className="font-semibold text-indigo-300">{activeBrand.brand_name}</span> — fields and logo auto-applied
+                  </span>
+                  <span className="text-xs text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full ml-auto flex-shrink-0">Auto-filled</span>
+                </div>
+              ) : (
+                <Link
+                  to="/brands"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-zinc-700 hover:border-zinc-500 text-sm text-zinc-500 hover:text-zinc-300 transition-all"
                 >
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-indigo-400" />
-                    <span className="text-sm font-medium text-zinc-300">
-                      {selectedProfile ? selectedProfile.brand_name : 'Use a brand profile (optional)'}
-                    </span>
-                    {selectedProfile && (
-                      <span className="text-xs text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full">
-                        Auto-filled
-                      </span>
-                    )}
-                  </div>
-                  <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${showBrands ? 'rotate-90' : ''}`} />
-                </button>
-                {showBrands && (
-                  <div className="mt-2 p-3 rounded-lg border border-zinc-800 bg-zinc-900/50">
-                    <BrandProfiles
-                      compact
-                      selectedId={selectedProfile?.id}
-                      onSelect={handleProfileSelect}
-                    />
-                    {selectedProfile && (
-                      <button
-                        onClick={() => handleProfileSelect(null)}
-                        className="mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        Clear selection
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                  <Briefcase className="w-4 h-4 flex-shrink-0" />
+                  Create a brand profile to auto-fill these fields and add your logo
+                </Link>
+              )
             )}
 
             <div>
@@ -464,9 +454,9 @@ export const Dashboard = () => {
                       ✦ Creative direction applied
                     </span>
                   )}
-                  {selectedProfile && (
+                  {activeBrand && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                      <Briefcase className="w-3 h-3" /> {selectedProfile.brand_name}
+                      <Briefcase className="w-3 h-3" /> {activeBrand.brand_name}
                     </span>
                   )}
                 </div>
@@ -588,6 +578,69 @@ export const Dashboard = () => {
                 </div>
               </div>
             )}
+
+            {/* What's Next — connect this launch to the rest of the platform */}
+            <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <ArrowRight className="w-5 h-5 text-indigo-400" />
+                What's Next
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {canUseBrands ? (
+                  !activeBrand ? (
+                    <button
+                      onClick={handleSaveAsBrand}
+                      disabled={savingBrand}
+                      className="flex items-start gap-3 p-4 rounded-lg border border-indigo-500/30 bg-indigo-500/5 hover:bg-indigo-500/10 text-left transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-8 h-8 rounded-md bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                        {savingBrand ? <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" /> : <Briefcase className="w-4 h-4 text-indigo-400" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-200">Save "{productName}" as a brand</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">Reuse this identity across Logo, Marketing &amp; Legal — no re-typing next time</p>
+                      </div>
+                    </button>
+                  ) : !backendLogoSrc && (
+                    <Link to="/logo" className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-600 transition-colors">
+                      <div className="w-8 h-8 rounded-md bg-rose-500/20 flex items-center justify-center flex-shrink-0">
+                        <Palette className="w-4 h-4 text-rose-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-200">Add a logo for {activeBrand.brand_name}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">It'll automatically appear on your video slides and posters</p>
+                      </div>
+                    </Link>
+                  )
+                ) : (
+                  <Link to="/pricing" className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-600 transition-colors">
+                    <div className="w-8 h-8 rounded-md bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                      <Briefcase className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-200">Save this as a reusable brand</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Upgrade to Starter to keep this identity across Logo, Marketing &amp; Legal</p>
+                    </div>
+                  </Link>
+                )}
+
+                <Link to="/legal" className="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-600 transition-colors">
+                  <div className="w-8 h-8 rounded-md bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <Scale className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-200">
+                      {(user?.legal?.total_available ?? 0) > 0 ? `Generate legal docs for ${productName}` : 'Set up Privacy Policy & Terms'}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {(user?.legal?.total_available ?? 0) > 0
+                        ? `${user.legal.total_available} credit${user.legal.total_available === 1 ? '' : 's'} available`
+                        : 'Available on Starter and above'}
+                    </p>
+                  </div>
+                </Link>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,23 +1,103 @@
-﻿import React from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Upload, Wand2, FolderOpen, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone } from 'lucide-react';
+import { Home, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone, ChevronDown, Check, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBrand } from '../context/BrandContext';
 import { toast } from 'sonner';
+
+// Persistent "active brand" switcher — keeps Marketing, Logo, and Legal
+// all working on the same brand without re-selecting it per page.
+const BrandSwitcher = () => {
+  const { profiles, activeBrand, selectBrand, canUseBrands } = useBrand();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  if (!canUseBrands) return null;
+
+  if (profiles.length === 0) {
+    return (
+      <Link
+        to="/brands"
+        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
+      >
+        <Plus className="w-3.5 h-3.5" /> Add a brand
+      </Link>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative hidden sm:block">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:border-zinc-600 transition-colors max-w-[180px]"
+      >
+        {activeBrand ? (
+          <>
+            <span className="flex gap-0.5 flex-shrink-0">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: activeBrand.primary_color }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: activeBrand.secondary_color }} />
+            </span>
+            <span className="text-sm text-zinc-200 truncate">{activeBrand.brand_name}</span>
+          </>
+        ) : (
+          <span className="text-sm text-zinc-500">Select brand</span>
+        )}
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-2 w-56 rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl z-50 overflow-hidden">
+          <div className="max-h-64 overflow-y-auto py-1">
+            {profiles.map(p => (
+              <button
+                key={p.id}
+                onClick={() => { selectBrand(p); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                  activeBrand?.id === p.id ? 'bg-indigo-600/20 text-indigo-300' : 'text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                <span className="flex gap-0.5 flex-shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.primary_color }} />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.secondary_color }} />
+                </span>
+                <span className="truncate flex-1">{p.brand_name}</span>
+                {activeBrand?.id === p.id && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+              </button>
+            ))}
+          </div>
+          <Link
+            to="/brands"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 border-t border-zinc-800 transition-colors"
+          >
+            <Briefcase className="w-3.5 h-3.5" /> Manage brands
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Layout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  const MARKETING_PATHS = ['/create', '/scripts', '/assets', '/gallery'];
+
   const navigation = [
     { name: 'Hub',       href: '/',         icon: Home },
-    { name: 'Brands',    href: '/brands',    icon: Briefcase },
     { name: 'Logo',      href: '/logo',      icon: Palette },
-    { name: 'Marketing', href: '/create',    icon: Megaphone },
+    { name: 'Marketing', href: '/create',    icon: Megaphone, match: MARKETING_PATHS },
     { name: 'Legal',     href: '/legal',     icon: Scale },
-    { name: 'Gallery',   href: '/gallery',   icon: FolderOpen },
-    { name: 'Scripts',   href: '/scripts',   icon: Wand2 },
-    { name: 'Assets',    href: '/assets',    icon: Upload },
     { name: 'Tutorial',  href: '/tutorial',  icon: Video },
   ];
 
@@ -34,7 +114,7 @@ export const Layout = ({ children }) => {
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center" data-testid="app-title">
+            <div className="flex items-center gap-3" data-testid="app-title">
               {/* Logo mark only — crop to top portion so dark tagline text stays hidden */}
               <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', background: '#fff', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
                 <img
@@ -43,12 +123,15 @@ export const Layout = ({ children }) => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }}
                 />
               </div>
+              <BrandSwitcher />
             </div>
 
             <div className="flex gap-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.href;
+                const isActive = item.match
+                  ? item.match.includes(location.pathname)
+                  : location.pathname === item.href;
                 return (
                   <Link
                     key={item.name}
