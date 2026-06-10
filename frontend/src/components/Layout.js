@@ -34,7 +34,7 @@ export const Layout = ({ children }) => {
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2.5" data-testid="app-title">
+            <div className="flex items-center" data-testid="app-title">
               {/* Logo mark only — crop to top portion so dark tagline text stays hidden */}
               <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', background: '#fff', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
                 <img
@@ -43,7 +43,6 @@ export const Layout = ({ children }) => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }}
                 />
               </div>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>LaunchBusiness AI</span>
             </div>
 
             <div className="flex gap-1">
