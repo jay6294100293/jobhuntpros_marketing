@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, Home, Upload, Wand2, Image, FolderOpen, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video } from 'lucide-react';
+import { Sparkles, Home, Upload, Wand2, FolderOpen, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -10,15 +10,15 @@ export const Layout = ({ children }) => {
   const { user, logout } = useAuth();
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Assets', href: '/assets', icon: Upload },
-    { name: 'Scripts', href: '/scripts', icon: Wand2 },
-    { name: 'Create', href: '/create', icon: Image },
-    { name: 'Gallery', href: '/gallery', icon: FolderOpen },
-    { name: 'Logo', href: '/logo', icon: Palette },
-    { name: 'Legal', href: '/legal', icon: Scale },
-    { name: 'Brands', href: '/brands', icon: Briefcase },
-    { name: 'Tutorial', href: '/tutorial', icon: Video },
+    { name: 'Hub',       href: '/',         icon: Home },
+    { name: 'Brands',    href: '/brands',    icon: Briefcase },
+    { name: 'Logo',      href: '/logo',      icon: Palette },
+    { name: 'Marketing', href: '/create',    icon: Megaphone },
+    { name: 'Legal',     href: '/legal',     icon: Scale },
+    { name: 'Gallery',   href: '/gallery',   icon: FolderOpen },
+    { name: 'Scripts',   href: '/scripts',   icon: Wand2 },
+    { name: 'Assets',    href: '/assets',    icon: Upload },
+    { name: 'Tutorial',  href: '/tutorial',  icon: Video },
   ];
 
   const handleLogout = () => {

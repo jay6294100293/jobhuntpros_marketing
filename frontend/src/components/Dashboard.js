@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, ChevronRight } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, ChevronRight, Palette, Scale, Megaphone, ArrowRight, ImageIcon } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -130,22 +130,155 @@ export const Dashboard = () => {
     }
   };
   
+  const backendLogoSrc = selectedProfile?.active_logo_url
+    ? (selectedProfile.active_logo_url.startsWith('http')
+        ? selectedProfile.active_logo_url
+        : `${BACKEND_URL}${selectedProfile.active_logo_url}`)
+    : null;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none" />
-      
-      <div className="relative z-10 text-center mb-12">
-        <h1 className="text-5xl md:text-6xl font-heading font-bold tracking-tight mb-4" data-testid="dashboard-title">
-          <span className="text-gradient">Create Pro Content</span>
-          <br />
-          <span className="text-zinc-100">In One Click</span>
-        </h1>
-        <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
-          Transform any URL into a complete marketing package: ads, tutorials, and social posters.
-        </p>
+
+      {/* ── Brand Hub ─────────────────────────────────────────────────── */}
+      <div className="relative z-10 mb-10">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-2xl font-heading font-bold text-zinc-100" data-testid="dashboard-title">
+              Business Launch Hub
+            </h1>
+            <p className="text-sm text-zinc-500 mt-0.5">
+              Brand Identity → Marketing → Legal — three tools, one workflow
+            </p>
+          </div>
+          {selectedProfile && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60">
+              <div className="flex gap-1">
+                <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.primary_color }} />
+                <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.secondary_color }} />
+              </div>
+              <span className="text-sm text-zinc-300 font-medium">{selectedProfile.brand_name}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* Pillar 1 — Brand Identity */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center flex-shrink-0">
+                <Palette className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Step 1</p>
+                <h3 className="text-sm font-bold text-zinc-100 leading-tight">Brand Identity</h3>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4 flex-1">
+              Logo, brand colors, and visual identity. Saved logo auto-renders on every video and poster.
+            </p>
+            {backendLogoSrc ? (
+              <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-950/30 border border-emerald-800/30">
+                <img src={backendLogoSrc} alt="Brand logo"
+                     className="w-9 h-9 rounded-md object-contain bg-zinc-800"
+                     onError={e => { e.target.style.display = 'none'; }} />
+                <div>
+                  <p className="text-xs font-semibold text-emerald-400">Logo saved ✓</p>
+                  <p className="text-xs text-zinc-500">Used in all content</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-amber-950/20 border border-amber-800/20">
+                <div className="w-9 h-9 rounded-md bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                  <ImageIcon className="w-4 h-4 text-zinc-600" />
+                </div>
+                <p className="text-xs text-amber-500/80">No logo saved yet</p>
+              </div>
+            )}
+            <Link to="/logo"
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition-colors group mt-auto">
+              Open Logo Maker
+              <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+            </Link>
+          </div>
+
+          {/* Pillar 2 — Marketing */}
+          <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-5 flex flex-col shadow-lg shadow-indigo-500/5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center flex-shrink-0">
+                <Megaphone className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-indigo-400 uppercase tracking-wider font-semibold">Step 2</p>
+                <h3 className="text-sm font-bold text-zinc-100 leading-tight">Marketing</h3>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-400 mb-4 flex-1">
+              Videos, scripts, and social posters — generated from your website URL in 90 seconds.
+            </p>
+            <div className="flex items-center gap-3 mb-3 p-2 rounded-lg bg-indigo-950/40 border border-indigo-800/30">
+              <div className="text-center flex-1">
+                <p className="text-lg font-bold text-indigo-300">{user?.usage?.videos ?? 0}</p>
+                <p className="text-xs text-zinc-500">Videos</p>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div className="text-center flex-1">
+                <p className="text-lg font-bold text-indigo-300">{user?.usage?.posters ?? 0}</p>
+                <p className="text-xs text-zinc-500">Posters</p>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div className="text-center flex-1">
+                <p className="text-lg font-bold text-indigo-300">{user?.usage?.scripts ?? 0}</p>
+                <p className="text-xs text-zinc-500">Scripts</p>
+              </div>
+            </div>
+            <button
+              onClick={() => document.getElementById('magic-button-section')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-colors group mt-auto">
+              Create Marketing Pack
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
+
+          {/* Pillar 3 — Legal */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-400 flex items-center justify-center flex-shrink-0">
+                <Scale className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Step 3</p>
+                <h3 className="text-sm font-bold text-zinc-100 leading-tight">Legal & Compliance</h3>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4 flex-1">
+              Privacy Policy, Terms of Service, and compliance documents — AI-generated and jurisdiction-aware.
+            </p>
+            {user?.legal?.total_available > 0 ? (
+              <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-emerald-950/20 border border-emerald-800/20">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                <p className="text-xs text-emerald-400">
+                  {user.legal.total_available} credit{user.legal.total_available !== 1 ? 's' : ''} available
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                <div className="w-2 h-2 rounded-full bg-zinc-600 flex-shrink-0" />
+                <p className="text-xs text-zinc-600">Requires Starter plan</p>
+              </div>
+            )}
+            <Link to="/legal"
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition-colors group mt-auto">
+              Open Legal Docs
+              <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+            </Link>
+          </div>
+        </div>
       </div>
-      
-      <div className="relative z-10 max-w-3xl mx-auto">
+
+      {/* ── Marketing Creator ─────────────────────────────────────────── */}
+      <div id="magic-button-section" className="relative z-10 max-w-3xl mx-auto">
 
         {/* Free Pro trial banner */}
         {hasFreeTrial && (
@@ -159,6 +292,16 @@ export const Dashboard = () => {
             <span className="text-xs font-bold text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full flex-shrink-0">FREE TRIAL</span>
           </div>
         )}
+
+        <div className="mb-4">
+          <h2 className="text-lg font-heading font-semibold text-zinc-100 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-indigo-400" />
+            Create Marketing Pack
+          </h2>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            Paste your URL — get videos, scripts, and posters in 90 seconds.
+          </p>
+        </div>
 
         <div className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           <div className="space-y-6">
@@ -519,20 +662,6 @@ export const Dashboard = () => {
             )}
           </div>
         )}
-      </div>
-      
-      <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { title: 'AI-Powered Scripts', desc: 'PAS, Step-by-Step, Before/After frameworks', icon: '📝' },
-          { title: 'Auto Video Creation', desc: 'Zoom, pan, captions, and progress bars', icon: '🎬' },
-          { title: 'Multi-Format Export', desc: '16:9, 9:16, 1:1 for all platforms', icon: '📱' },
-        ].map((feature, i) => (
-          <div key={i} className="bg-zinc-900/40 backdrop-blur-sm border border-zinc-800 rounded-xl p-6 card-hover">
-            <div className="text-3xl mb-3">{feature.icon}</div>
-            <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-            <p className="text-sm text-zinc-400">{feature.desc}</p>
-          </div>
-        ))}
       </div>
     </div>
   );
