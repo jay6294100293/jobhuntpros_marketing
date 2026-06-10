@@ -29,6 +29,7 @@ export const Dashboard = () => {
   const [showCreative, setShowCreative] = useState(false);
   const [showBrands, setShowBrands] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [hubProfile, setHubProfile] = useState(null);  // most recent profile — for hub display only
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [usedCreative, setUsedCreative] = useState(false);
@@ -43,6 +44,19 @@ export const Dashboard = () => {
   const canUseCreative = user?.tier && user.tier !== 'free';
   const canUseBrands   = user?.tier && user.tier !== 'free';
 
+  // Load most recent brand profile for hub status display (doesn't auto-fill the form)
+  useEffect(() => {
+    if (!user || user.tier === 'free') return;
+    const token = localStorage.getItem('jhp_token');
+    if (!token) return;
+    axios.get(`${BACKEND_URL}/api/brand-profiles`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(res => {
+      const profiles = res.data?.profiles || [];
+      if (profiles.length > 0) setHubProfile(profiles[0]);
+    }).catch(() => {});
+  }, [user]);
+
   const handleProfileSelect = (profile) => {
     setSelectedProfile(profile);
     setShowBrands(false);
@@ -50,6 +64,7 @@ export const Dashboard = () => {
     if (profile.brand_name) setProductName(profile.brand_name);
     if (profile.url)        setUrl(profile.url);
     if (profile.audience)   setTargetAudience(profile.audience);
+    setHubProfile(profile);  // keep hub in sync when user picks a profile
   };
   const hasFreeTrial = user && !user.free_pro_trial_used;
 
@@ -130,10 +145,11 @@ export const Dashboard = () => {
     }
   };
   
-  const backendLogoSrc = selectedProfile?.active_logo_url
-    ? (selectedProfile.active_logo_url.startsWith('http')
-        ? selectedProfile.active_logo_url
-        : `${BACKEND_URL}${selectedProfile.active_logo_url}`)
+  const displayProfile = selectedProfile || hubProfile;
+  const backendLogoSrc = displayProfile?.active_logo_url
+    ? (displayProfile.active_logo_url.startsWith('http')
+        ? displayProfile.active_logo_url
+        : `${BACKEND_URL}${displayProfile.active_logo_url}`)
     : null;
 
   return (
@@ -151,13 +167,13 @@ export const Dashboard = () => {
               Brand Identity → Marketing → Legal — three tools, one workflow
             </p>
           </div>
-          {selectedProfile && (
+          {displayProfile && (
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60">
               <div className="flex gap-1">
-                <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.primary_color }} />
-                <span className="w-3 h-3 rounded-full" style={{ background: selectedProfile.secondary_color }} />
+                <span className="w-3 h-3 rounded-full" style={{ background: displayProfile.primary_color }} />
+                <span className="w-3 h-3 rounded-full" style={{ background: displayProfile.secondary_color }} />
               </div>
-              <span className="text-sm text-zinc-300 font-medium">{selectedProfile.brand_name}</span>
+              <span className="text-sm text-zinc-300 font-medium">{displayProfile.brand_name}</span>
             </div>
           )}
         </div>
