@@ -30,6 +30,7 @@ BRAND_TIER_LIMITS = {
 class BrandProfileCreate(BaseModel):
     brand_name:     str            = Field(max_length=100)
     tagline:        Optional[str]  = Field(default=None, max_length=200)
+    description:    Optional[str]  = Field(default=None, max_length=500)
     url:            Optional[str]  = Field(default=None, max_length=500)
     primary_color:  str            = Field(default="#6366f1", max_length=7)
     secondary_color:str            = Field(default="#8b5cf6", max_length=7)
@@ -112,6 +113,7 @@ async def create_profile(body: BrandProfileCreate, user=Depends(_require_user)):
         "user_id":         user["id"],
         "brand_name":      body.brand_name.strip(),
         "tagline":         (body.tagline or "").strip() or None,
+        "description":     (body.description or "").strip() or None,
         "url":             (body.url or "").strip() or None,
         "primary_color":   _clean_hex(body.primary_color),
         "secondary_color": _clean_hex(body.secondary_color),
@@ -166,6 +168,7 @@ async def update_profile(profile_id: str, body: BrandProfileUpdate, user=Depends
     updates = {
         "brand_name":      body.brand_name.strip(),
         "tagline":         (body.tagline or "").strip() or None,
+        "description":     (body.description or "").strip() or None,
         "url":             (body.url or "").strip() or None,
         "primary_color":   _clean_hex(body.primary_color),
         "secondary_color": _clean_hex(body.secondary_color),

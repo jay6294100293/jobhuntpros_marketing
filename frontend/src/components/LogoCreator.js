@@ -23,6 +23,17 @@ const MODES = [
   { id: 'both',     label: 'Both',           desc: 'Templates + AI concepts',   Icon: Cpu },
 ];
 
+const KIT_ASSETS = [
+  { key: 'icon_transparent', label: 'Icon (transparent)', ext: 'png' },
+  { key: 'icon_dark',        label: 'Icon (dark bg)',      ext: 'png' },
+  { key: 'icon_light',       label: 'Icon (light bg)',     ext: 'png' },
+  { key: 'horizontal_dark',  label: 'Lockup (dark)',       ext: 'png' },
+  { key: 'horizontal_light', label: 'Lockup (light)',      ext: 'png' },
+  { key: 'favicon',          label: 'Favicon (.ico)',      ext: 'ico' },
+  { key: 'app_icon_192',     label: 'App icon 192',        ext: 'png' },
+  { key: 'app_icon_512',     label: 'App icon 512',        ext: 'png' },
+];
+
 const inputCls = "w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-2.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600";
 
 export const LogoCreator = () => {
@@ -37,6 +48,8 @@ export const LogoCreator = () => {
   const [results, setResults]               = useState(null);
   const [selected, setSelected]             = useState(null);
   const [settingLogo, setSettingLogo]       = useState(false);
+  const [kit, setKit]                       = useState(null);
+  const [generatingKit, setGeneratingKit]   = useState(false);
 
   const token = () => localStorage.getItem('jhp_token');
 
@@ -82,6 +95,7 @@ export const LogoCreator = () => {
     setLoading(true);
     setResults(null);
     setSelected(null);
+    setKit(null);
     try {
       const { data } = await axios.post(`${API}/generate-logo`, {
         brand_name: brandName.trim(),
@@ -114,6 +128,43 @@ export const LogoCreator = () => {
       URL.revokeObjectURL(blobUrl);
     } catch {
       toast.error('Download failed');
+    }
+  };
+
+  const handleGenerateKit = async () => {
+    if (!brandName.trim()) { toast.error('Brand name is required'); return; }
+    setGeneratingKit(true);
+    setKit(null);
+    try {
+      const { data } = await axios.post(`${API}/generate-logo-kit`, {
+        brand_name: brandName.trim(),
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+      }, { headers: { Authorization: `Bearer ${token()}` } });
+      setKit(data);
+      toast.success('Brand kit generated — icon, light/dark and lockup variants ready');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Brand kit generation failed');
+    } finally {
+      setGeneratingKit(false);
+    }
+  };
+
+  const handleDownloadKitZip = async () => {
+    if (!kit) return;
+    const ids = Object.values(kit.files).map(url => url.split('/').pop()).join(',');
+    try {
+      const res = await axios.get(`${BACKEND_URL}/api/download-pack?ids=${encodeURIComponent(ids)}`, { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${safeName}-brand-kit.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('ZIP download failed');
     }
   };
 
@@ -357,12 +408,56 @@ export const LogoCreator = () => {
                           : 'Pick a brand above first'}
                       </button>
                     )}
+                    <button
+                      onClick={handleGenerateKit}
+                      disabled={generatingKit}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors active:scale-95 border border-zinc-700 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {generatingKit
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <LayoutTemplate className="w-4 h-4" />}
+                      Generate Brand Kit
+                    </button>
                   </div>
                   {canUseBrands && !activeBrand && (
                     <p className="text-xs text-zinc-600">
                       Pick a brand from the switcher in the navbar — clicking a logo will save it automatically.
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Brand Kit results */}
+              {kit && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                      Brand Kit — icon, lockups, favicon &amp; app icons
+                    </h2>
+                    <button
+                      onClick={handleDownloadKitZip}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors active:scale-95"
+                    >
+                      <Download className="w-3 h-3" /> Download All as ZIP
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {KIT_ASSETS.map(({ key, label, ext }) => kit.files[key] && (
+                      <div key={key} className="rounded-lg border border-zinc-800 overflow-hidden bg-zinc-900/50">
+                        <div className="aspect-square flex items-center justify-center p-3"
+                             style={{ background: key.includes('light') ? '#fafafa' : '#09090b' }}>
+                          <img src={`${BACKEND_URL}${kit.files[key]}`} alt={label}
+                               className="max-w-full max-h-full object-contain" />
+                        </div>
+                        <button
+                          onClick={() => handleDownload(kit.files[key], `${safeName}-${key}.${ext}`)}
+                          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-colors"
+                        >
+                          <Download className="w-3 h-3" /> {label}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

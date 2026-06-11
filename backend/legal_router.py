@@ -437,29 +437,36 @@ async def start_chat(profile_id: str, body: StartChatRequest = None, user=Depend
 
     # Try to pre-fill from a brand profile to skip known questions
     prefill_lines = []
+    has_description = False
     if body and body.brand_profile_id:
         try:
             bp = await db.brand_profiles.find_one(
                 {"id": body.brand_profile_id, "user_id": user["id"]}, {"_id": 0}
             )
             if bp:
-                if bp.get("business_type"):   prefill_lines.append(f"- Business type: **{bp['business_type']}**")
+                if bp.get("description"):      prefill_lines.append(f"- What the business does: {bp['description']}")
+                if bp.get("business_type"):    prefill_lines.append(f"- Business type: **{bp['business_type']}**")
                 if bp.get("jurisdiction"):     prefill_lines.append(f"- Jurisdiction: **{bp['jurisdiction']}**")
                 if bp.get("revenue_model"):    prefill_lines.append(f"- Revenue model: **{bp['revenue_model']}**")
                 if bp.get("data_practices"):   prefill_lines.append(f"- Data practices: {bp['data_practices']}")
                 if bp.get("audience"):         prefill_lines.append(f"- Target audience: {bp['audience']}")
+                has_description = bool(bp.get("description"))
         except Exception:
             pass
 
     if prefill_lines:
+        remaining_questions = []
+        if not has_description:
+            remaining_questions.append("**What exactly does the business do?** Give me a 1-2 sentence description.")
+        remaining_questions.append("**What's the legal business structure?** (sole proprietor, LLC, corporation, partnership)")
+        remaining_questions.append("**Any specific concerns or document requirements** I should know about?")
+        questions = "\n".join(f"{i + 1}. {q}" for i, q in enumerate(remaining_questions))
         greeting = (
             f"Hi! I'm here to help generate the legal documents for **{profile['name']}**.\n\n"
             "I've loaded your brand profile — here's what I already know:\n\n"
             + "\n".join(prefill_lines)
             + "\n\nI just need a few more details:\n\n"
-            "1. **What exactly does the business do?** Give me a 1-2 sentence description.\n"
-            "2. **What's the legal business structure?** (sole proprietor, LLC, corporation, partnership)\n"
-            "3. **Any specific concerns or document requirements** I should know about?"
+            + questions
         )
     else:
         greeting = (

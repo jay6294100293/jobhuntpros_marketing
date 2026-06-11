@@ -16,7 +16,7 @@ const REVENUE_MODELS = ['Subscription', 'One-time', 'Freemium', 'Marketplace', '
 const CTA_OPTIONS = ['Try free', 'Get started', 'Buy now', 'Learn more', 'Download free', 'Book a demo'];
 
 const EMPTY_FORM = {
-  brand_name: '', tagline: '', url: '',
+  brand_name: '', tagline: '', description: '', url: '',
   primary_color: '#6366f1', secondary_color: '#8b5cf6',
   audience: '', tone: 'Professional', business_type: 'SaaS',
   jurisdiction: 'Canada', revenue_model: 'Subscription',
@@ -171,6 +171,13 @@ function ProfileFormModal({ initial, onSave, onClose, saving }) {
                 <input className={inputCls} value={form.tagline || ''}
                        onChange={e => set('tagline', e.target.value)}
                        placeholder="From URL to launch-ready in 90 seconds" />
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>What does this business do? (optional — speeds up Legal intake)</label>
+                <textarea className={inputCls} rows={2} value={form.description || ''}
+                          onChange={e => set('description', e.target.value)}
+                          maxLength={500}
+                          placeholder="A 2–3 sentence description of the product, who it's for, and how it makes money." />
               </div>
               <div className="col-span-2">
                 <label className={labelCls}>Website URL (optional — auto-extracts colors)</label>

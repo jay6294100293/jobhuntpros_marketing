@@ -4275,6 +4275,47 @@ _LOGO_TEMPLATES = {
 }
 
 
+def _brand_initials(brand_name: str) -> str:
+    words = brand_name.split()
+    return ''.join(w[0].upper() for w in words[:2] if w) or brand_name[:2].upper()
+
+
+def _icon_mark(initials: str, c1: tuple, fg: tuple = _LOGO_WHITE, size: int = 512) -> Image.Image:
+    """RGBA rounded badge with initials, transparent background — the reusable 'icon mark'."""
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    pad = size // 16
+    _rr(d, [pad, pad, size - pad, size - pad], size // 5, c1 + (255,))
+    f = _logo_font(int(size * 0.42), bold=True)
+    bb = d.textbbox((0, 0), initials, font=f)
+    tx = (size - (bb[2] - bb[0])) // 2 - bb[0]
+    ty = (size - (bb[3] - bb[1])) // 2 - bb[1]
+    d.text((tx, ty), initials, fill=fg + (255,), font=f)
+    return img
+
+
+def _logo_horizontal(brand_name: str, initials: str, c1: tuple, bg: tuple, fg: tuple) -> Image.Image:
+    """1200x360 lockup: icon mark + brand wordmark side by side (email signatures, headers)."""
+    W, H = 1200, 360
+    img = Image.new('RGB', (W, H), bg)
+    icon_size = 240
+    mark = _icon_mark(initials, c1, fg, size=icon_size)
+    pad = 60
+    img.paste(mark, (pad, (H - icon_size) // 2), mark)
+    d = ImageDraw.Draw(img)
+    text_x = pad + icon_size + 50
+    max_w = W - text_x - pad
+    nf = _logo_font(110, bold=True)
+    nlines = _wrap(d, brand_name, nf, max_w)
+    if len(nlines) > 1:
+        nf = _logo_font(70, bold=True)
+        nlines = _wrap(d, brand_name, nf, max_w)
+    line = nlines[0]
+    bb = d.textbbox((0, 0), line, font=nf)
+    d.text((text_x, (H - (bb[3] - bb[1])) // 2 - bb[1]), line, fill=fg, font=nf)
+    return img
+
+
 class LogoGenerateRequest(BaseModel):
     brand_name: str = Field(min_length=1, max_length=60)
     tagline: Optional[str] = Field(default="", max_length=150)
@@ -4399,6 +4440,67 @@ async def generate_logo(request: LogoGenerateRequest, user=Depends(get_current_u
 
     await increment_usage(user["id"], "logos")
     return {"templates": templates, "ai_concepts": ai_concepts, "ai_available": bool(IDEOGRAM_API_KEY)}
+
+
+class LogoKitRequest(BaseModel):
+    brand_name: str = Field(min_length=1, max_length=60)
+    primary_color: str = "#6366f1"
+    secondary_color: str = "#8b5cf6"
+
+    @field_validator("primary_color", "secondary_color")
+    @classmethod
+    def _val_color(cls, v):
+        if not re.match(r'^#[0-9a-fA-F]{6}$', v):
+            raise ValueError("Color must be #rrggbb")
+        return v.lower()
+
+
+@api_router.post("/generate-logo-kit")
+async def generate_logo_kit(request: LogoKitRequest, user=Depends(get_current_user)):
+    """
+    Generate a brand kit from name + colors: icon mark (transparent/dark/light),
+    horizontal lockups (dark/light), favicon (.ico), and app icons (192/512).
+    Free export of an already-generated brand identity — no usage-limit charge.
+    """
+    c1 = _hex_to_rgb(request.primary_color)
+    initials = _brand_initials(request.brand_name)
+    kit_id = uuid.uuid4().hex[:12]
+    loop = asyncio.get_running_loop()
+
+    def _build():
+        icon_t = _icon_mark(initials, c1, _LOGO_WHITE, size=512)
+        icon_dark = Image.alpha_composite(Image.new('RGBA', icon_t.size, _LOGO_BG + (255,)), icon_t).convert('RGB')
+        icon_light = Image.alpha_composite(Image.new('RGBA', icon_t.size, (255, 255, 255, 255)), icon_t).convert('RGB')
+        horiz_dark = _logo_horizontal(request.brand_name, initials, c1, _LOGO_BG, _LOGO_WHITE)
+        horiz_light = _logo_horizontal(request.brand_name, initials, c1, (255, 255, 255), (24, 24, 27))
+        return {
+            "icon_transparent": icon_t,
+            "icon_dark": icon_dark,
+            "icon_light": icon_light,
+            "horizontal_dark": horiz_dark,
+            "horizontal_light": horiz_light,
+            "app_icon_192": icon_t.resize((192, 192), Image.LANCZOS),
+            "app_icon_512": icon_t,
+        }
+
+    images = await loop.run_in_executor(None, _build)
+
+    files = {}
+    for key, img in images.items():
+        fname = f"logokit_{key}_{kit_id}.png"
+        fpath = OUTPUTS_DIR / fname
+        await loop.run_in_executor(None, lambda fp=fpath, im=img: im.save(str(fp)))
+        files[key] = f"/api/download/{fname}"
+
+    fav_name = f"logokit_favicon_{kit_id}.ico"
+    fav_path = OUTPUTS_DIR / fav_name
+    await loop.run_in_executor(
+        None,
+        lambda: images["icon_transparent"].save(str(fav_path), format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    )
+    files["favicon"] = f"/api/download/{fav_name}"
+
+    return {"kit_id": kit_id, "files": files}
 
 
 @api_router.post("/logos/save")

@@ -140,6 +140,7 @@ export const Dashboard = () => {
       const payload = {
         brand_name: productName,
         tagline: (brandData.description || '').slice(0, 100),
+        description: (brandData.description || '').slice(0, 500),
         url,
         primary_color: brandData.colors?.[0] || '#6366f1',
         secondary_color: brandData.colors?.[1] || '#8b5cf6',
