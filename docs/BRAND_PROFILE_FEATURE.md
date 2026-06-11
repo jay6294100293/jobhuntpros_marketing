@@ -1,6 +1,6 @@
 # LaunchBusiness AI — Brand Profile + Content Creator Replacement
 # Feature spec decided: June 2026
-# Status: NOT YET BUILT — next major development priority
+# Status: Items 1–15 DONE. Item 16 (cross-tool brand cohesion) DONE — see bottom of Build Priority Order.
 
 ---
 
@@ -297,6 +297,7 @@ Three hook angles to generate per run:
 | 13 | 4:5 format export | server.py TIER_CONFIG + format_map | ✅ DONE |
 | 14 | Batch ZIP download | server.py /download-pack + Dashboard.js | ✅ DONE |
 | 15 | Full Launch Pack endpoint | Covered by magic button + ZIP | ✅ DONE |
+| 16 | Global active-brand context, navbar switcher, nav consolidation (8→5), "Save as Brand" + "What's Next" cross-sells, real logo everywhere | BrandContext.js (new), MarketingLayout.js (new), Layout.js, Dashboard.js, LogoCreator.js, Landing.js, auth/* | ✅ DONE (June 2026) |
 
 ---
 

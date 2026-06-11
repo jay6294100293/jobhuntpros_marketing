@@ -58,6 +58,21 @@ LaunchBusiness AI is a two-pillar platform for founders:
 | Document vault with download/copy | ✅ Live |
 | 90-day laws-changed nudge | ✅ Live |
 
+### ✅ Brand Cohesion (June 2026 — new)
+
+Connects the previously-siloed Logo / Marketing / Legal tools via one shared "active brand".
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Global active-brand context | ✅ Live | `frontend/src/context/BrandContext.js` — persists `jhp_active_brand_id` in localStorage |
+| Navbar brand switcher | ✅ Live | `Layout.js` — pick active brand from any page (Starter+) |
+| Nav consolidation (8 → 5 items) | ✅ Live | Hub / Logo / Marketing / Legal / Tutorial — Quick Create/Scripts/Assets/Gallery folded under "Marketing" via `MarketingLayout.js` sub-tabs |
+| Logo Creator auto-fill from active brand | ✅ Live | `LogoCreator.js` — brand name/tagline/colors pre-filled, "Save to {brand}" on generated logos |
+| "Save as Brand Profile" cross-sell | ✅ Live | Hub "What's Next" — turns a URL-paste launch pack into a reusable profile (Starter+) |
+| "What's Next" cross-sell nudges | ✅ Live | Hub results — add a logo / generate legal docs / upgrade to save as brand |
+| Real logo everywhere | ✅ Live | `/logo.png` used in navbar, Login/Register/Forgot/Reset/Verify, Landing page (nav + footer), favicon + OG image — replaced generic Sparkles-icon placeholders |
+| Auth token key fix | ✅ Live | `BrandProfiles.js`, `LegalDocs.js`, `legal/*.js` were reading localStorage `token` instead of `jhp_token` (silent 401s) |
+
 ---
 
 ## Tech Stack
@@ -135,17 +150,21 @@ backend/modal_sadtalker.py     Modal SadTalker talking head GPU app
 backend/requirements.txt       Python dependencies
 
 frontend/src/App.js            React routing + auth gate
+frontend/src/context/
+  AuthContext.js                Auth state — JWT in localStorage `jhp_token`
+  BrandContext.js               Global "active brand" — shared by navbar, Logo Creator, Hub
 frontend/src/components/
   Landing.js                   Marketing landing page (two pillars: marketing + legal)
-  Dashboard.js                 Magic Button UI + progress
+  Dashboard.js                 Brand Launch Hub — Magic Button UI + "Save as Brand" + cross-sell nudges
+  MarketingLayout.js           Sub-tab nav for Quick Create / Scripts / Assets / Gallery
   LegalDocs.js                 Legal documents — disclaimer gate + view router
   legal/ProfileManager.js      Business profile CRUD with plan limits
   legal/ChatIntake.js          Gemini intake chat UI with typing indicators
   legal/DocumentCatalog.js     Category grid + checkboxes + sticky credit panel
   legal/DocumentVault.js       Document list + markdown viewer + regen button
   legal/TopupModal.js          Stripe credit topup — 3 packages
-  LogoCreator.js               Logo generator UI
-  Layout.js                    Nav with Legal + Tutorial + Brands links
+  LogoCreator.js               Logo generator UI — auto-fills from active brand, "Save to brand"
+  Layout.js                    Top nav (Hub/Logo/Marketing/Legal/Tutorial) + brand switcher
   TutorialStudio.js            Tutorial Studio — upload recording, view result
   BrandProfiles.js             Brand profile CRUD + logo picker
 
