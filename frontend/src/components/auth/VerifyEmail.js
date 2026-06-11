@@ -115,9 +115,7 @@ export const VerifyEmail = () => {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-block mb-4" style={{ background: '#fff', borderRadius: 16, padding: '12px 20px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-            <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: 160, height: 'auto', display: 'block' }} />
-          </div>
+          <img src="/logo_white.png" alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI" className="inline-block mb-4" style={{ width: 280, maxWidth: '90vw', height: 'auto', display: 'block' }} />
         </div>
         <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-xl p-8">
           {renderContent()}

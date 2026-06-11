@@ -115,14 +115,11 @@ export const Layout = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3" data-testid="app-title">
-              {/* Logo mark only — crop to top portion so dark tagline text stays hidden */}
-              <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', background: '#fff', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
-                <img
-                  src="/logo.png"
-                  alt="LaunchBusiness AI"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }}
-                />
-              </div>
+              <img
+                src="/logo_white.png"
+                alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI"
+                style={{ height: 48, width: 'auto', display: 'block', flexShrink: 0 }}
+              />
               <BrandSwitcher />
             </div>
 

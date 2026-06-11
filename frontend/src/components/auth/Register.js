@@ -54,9 +54,7 @@ export const Register = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-block mb-4" style={{ background: '#fff', borderRadius: 16, padding: '12px 20px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-            <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: 160, height: 'auto', display: 'block' }} />
-          </div>
+          <img src="/logo_white.png" alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI" className="inline-block mb-4" style={{ width: 280, maxWidth: '90vw', height: 'auto', display: 'block' }} />
           <p className="text-zinc-400 mt-2">Create your free account</p>
         </div>
 

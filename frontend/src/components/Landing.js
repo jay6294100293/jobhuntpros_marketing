@@ -112,11 +112,12 @@ export function Landing() {
 
       {/* ── Navbar ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5">
-        <Link to="/" className="flex items-center gap-2 no-underline">
-          <div style={{ width: 32, height: 32, borderRadius: 8, overflow: 'hidden', background: '#fff', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
-            <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }} />
-          </div>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>LaunchBusiness AI</span>
+        <Link to="/" className="flex items-center no-underline">
+          <img
+            src="/logo_white.png"
+            alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI"
+            style={{ height: 52, width: 'auto', display: 'block' }}
+          />
         </Link>
         <div className="hidden md:flex items-center gap-6 text-sm text-zinc-400">
           <a href="#features" className="hover:text-white transition-colors no-underline">Features</a>
@@ -523,11 +524,12 @@ export function Landing() {
 
       {/* ── Footer ── */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '24px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <div className="flex items-center gap-2">
-          <div style={{ width: 24, height: 24, borderRadius: 6, overflow: 'hidden', background: '#fff', flexShrink: 0 }}>
-            <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 8%' }} />
-          </div>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14, color: '#52525b' }}>LaunchBusiness AI</span>
+        <div className="flex items-center">
+          <img
+            src="/logo_white.png"
+            alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI"
+            style={{ height: 36, width: 'auto', display: 'block' }}
+          />
         </div>
         <div className="flex gap-6">
           {[['Pricing', '#pricing'], ['Privacy', '/privacy'], ['Terms', '/terms'], ['NovaJay Tech', 'https://novajaytech.com']].map(([label, href]) => (

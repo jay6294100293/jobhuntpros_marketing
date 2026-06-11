@@ -32,9 +32,7 @@ const ProtectedApp = () => {
   if (loading) return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-8">
       <div className="absolute pointer-events-none" style={{ width: 500, height: 500, background: 'radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-      <div style={{ background: '#fff', borderRadius: 20, padding: '20px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
-        <img src="/logo.png" alt="LaunchBusiness AI" style={{ width: 180, height: 'auto', display: 'block' }} />
-      </div>
+      <img src="/logo_white.png" alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI" style={{ width: 320, maxWidth: '90vw', height: 'auto', display: 'block' }} />
       <div className="flex items-center gap-2">
         {[0, 150, 300].map((delay, i) => (
           <div key={i} className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" style={{ animationDelay: `${delay}ms` }} />
