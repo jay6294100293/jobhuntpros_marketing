@@ -1,5 +1,7 @@
 # LaunchBusiness AI — Tutorial Studio (Chrome Extension)
-# Feature decision: June 2026 | Status: PLANNED — next build priority after Wan 2.2 swap
+# Feature decision: June 2026 | Status: ✅ Implemented — extension/ (manifest.json,
+# background.js, popup.html, popup.js, icons), POST /api/tutorial/process (server.py), and
+# TutorialStudio.js all exist. Verify Chrome Web Store submission / sideload testing.
 
 ---
 

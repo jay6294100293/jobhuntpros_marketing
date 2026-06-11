@@ -1,130 +1,70 @@
-# 🔑 Setup Instructions for JobHuntPro Content Studio
+# LaunchBusiness AI — Local Setup
 
-Your app is configured with **FREE AI features** using Google Gemini and optional Google Cloud TTS!
-
-## ✅ What's Already Done
-- ✅ Backend code updated to use Gemini 2.5 Flash (FREE)
-- ✅ Google Cloud TTS integration ready (optional)
-- ✅ All integrations configured
-- ✅ Error handling with helpful messages
-- ✅ Usage tracking for free tier monitoring
-- ✅ System restarted and ready
+LaunchBusiness AI runs as 3 services via Docker Compose: FastAPI backend (`backend/`, port 8001),
+React frontend (`frontend/`, port 3000), and MongoDB. See `docs/PROJECT_SUMMARY.md` for full
+architecture, production deploy commands, and the complete environment variable reference.
 
 ---
 
-## 🎯 STEP 1: Add FREE Gemini API Key (REQUIRED - 2 minutes)
+## STEP 1: Add your Gemini API key (the only hard requirement)
 
-### Get Your FREE Gemini API Key
-1. Go to: **https://aistudio.google.com/apikey**
-2. Sign in with your Google account
-3. Click **"Get API Key"** or **"Create API key"**
-4. Copy the API key (looks like: `AIzaSy...`)
-
-### Add the Key to Your App
-1. Open the file: `/app/backend/.env`
-2. Find this line:
-   ```
-   GEMINI_API_KEY=your-gemini-api-key-here
-   ```
-3. Replace `your-gemini-api-key-here` with your actual key:
-   ```
+1. Go to **https://aistudio.google.com/apikey** and sign in with a Google account
+2. Click **"Create API key"** and copy it (starts with `AIzaSy...`)
+3. Copy `backend/.env.example` to `backend/.env`
+4. Set:
+   ```env
    GEMINI_API_KEY=AIzaSyYourActualKeyHere
    ```
-4. Save the file
 
-### Restart the Backend
+This is the only key required for the core pipeline (scraping, script generation, Brand Profile,
+legal intake chat, Tutorial Studio narration) to work locally. Everything else in
+`backend/.env.example` is optional for local dev — the app runs without them, just with reduced
+functionality (see below).
+
+**No TTS setup needed** — voiceover uses **Edge TTS** (Microsoft Neural voices), which is free
+and requires no API key or credentials file. gTTS is an automatic fallback if Edge TTS fails.
+There is no Google Cloud TTS step anymore.
+
+---
+
+## STEP 2: Run it
+
 ```bash
-sudo supervisorctl restart backend
+docker compose up -d --build
 ```
 
----
-
-## 🎤 STEP 2: Add Google Cloud TTS (OPTIONAL - 5 minutes)
-
-**Benefits:**
-- ✅ Professional AI voiceovers for videos
-- ✅ 4 million characters/month FREE
-- ✅ Your usage (~50 scripts/month) = **100% FREE**
-
-**See detailed instructions in**: `/app/TTS_SETUP.md`
-
-**Quick Summary:**
-1. Create Google Cloud project
-2. Enable Text-to-Speech API
-3. Enable billing (don't worry, free tier is generous!)
-4. Create service account
-5. Download JSON key file as `gcloud-tts-key.json`
-6. Upload to `/app/backend/gcloud-tts-key.json`
-7. Restart backend
-
-**Skip TTS?** The app works perfectly without it. You can add it later anytime!
+- Backend: http://localhost:8001/api/ (health check)
+- Frontend: http://localhost:3000
 
 ---
 
-## 🎉 What You Get
+## What works without optional keys
 
-### With Gemini API Key (Required):
-- ✅ **FREE AI script generation** (up to 1,000 requests/day)
-- ✅ **Magic Button** - generates complete launch packs
-- ✅ **3 Script Frameworks**: PAS, Step-by-Step, Before/After
-- ✅ **No monthly costs** for AI features
+| Feature | Without optional keys | With key set |
+|---------|----------------------|---------------|
+| Script generation, Brand Profile, scraping | ✅ Full (Gemini only) | — |
+| Voiceover | ✅ Edge TTS (free, no key) | — |
+| Video B-roll | Pillow design slides only | + real stock footage (`PEXELS_API_KEY`) |
+| URL safety checks | Hostname/content checks only | + Google Safe Browsing API (`GOOGLE_SAFE_BROWSING_API_KEY`) |
+| GPU AI video / talking head | Disabled | Modal Wan 2.2 + SadTalker (`MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET`) |
+| Subscriptions / billing | Disabled | Stripe (`STRIPE_SECRET_KEY` + price IDs) |
+| Logo AI concepts | Pillow templates only | + Ideogram AI (`IDEOGRAM_API_KEY`) |
+| Password reset / welcome emails | Disabled | Brevo (`BREVO_API_KEY`) |
 
-### With Google Cloud TTS (Optional):
-- ✅ **Professional voiceovers** for your videos
-- ✅ **Human-like voices** (Neural2 quality)
-- ✅ **4M characters/month FREE** (way more than you need)
-
-### Always Available:
-- ✅ **URL scraping** - extracts brand colors, features
-- ✅ **Asset uploads** - images, videos, documents
-- ✅ **Poster generator** - 1:1 and 9:16 formats
-- ✅ **Video creator** - multi-format (16:9, 9:16, 1:1)
+For the full production environment variable list, Docker rebuild commands, and Modal deploy
+steps, see `docs/PROJECT_SUMMARY.md` → "Environment Variables" and "Deploy Commands".
 
 ---
 
-## 💰 Total Monthly Cost
+## Troubleshooting
 
-| Feature | Free Tier | Your Usage | Cost |
-|---------|-----------|------------|------|
-| **Gemini AI Scripts** | 1,000 req/day | 50 scripts/month | **$0** ✅ |
-| **Google Cloud TTS** | 4M chars/month | 20K chars/month | **$0** ✅ |
-| **URL Scraping** | Unlimited | Unlimited | **$0** ✅ |
-| **Poster/Video Gen** | Unlimited | Unlimited | **$0** ✅ |
-| **TOTAL** | - | - | **$0/month** 🎉 |
+**"GEMINI_API_KEY not configured" error**
+- Confirm `backend/.env` has `GEMINI_API_KEY` set, then `docker compose up -d --build backend`
 
----
-
-## 🆘 Need Help?
-
-### "GEMINI_API_KEY not configured" error?
-- Add your Gemini API key to `/app/backend/.env` (see Step 1)
-- Restart backend: `sudo supervisorctl restart backend`
-
-### "TTS service not available" error?
-- This is normal if you haven't added TTS credentials yet
-- TTS is optional - app works without it
-- To add TTS: Follow `/app/TTS_SETUP.md`
-
-### Test if Gemini is working:
+**Test the core pipeline end-to-end:**
 ```bash
-curl -X POST "http://localhost:8001/api/generate-script" \
+curl -X POST http://localhost:8001/api/magic-launch-pack \
   -H "Content-Type: application/json" \
-  -d '{"framework":"PAS","product_name":"TestProduct","target_audience":"developers","key_features":["fast","simple","free"]}'
+  -d '{"url": "https://example.com"}'
 ```
-
----
-
-## 🔗 Quick Links
-
-- **Gemini API Key**: https://aistudio.google.com/apikey
-- **Google Cloud Console**: https://console.cloud.google.com/
-- **TTS Setup Guide**: `/app/TTS_SETUP.md`
-- **Your App**: https://ugc-creator-13.preview.emergentagent.com/
-
----
-
-**Current Status**: 
-- ⏳ **Gemini**: Waiting for API key in `/app/backend/.env`
-- ⏳ **TTS**: Optional - add credentials if you want voiceovers
-
-**Priority**: Add Gemini API key first (Step 1) - TTS is optional!
+Should return videos + scripts + posters.

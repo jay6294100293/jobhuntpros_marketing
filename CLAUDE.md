@@ -44,8 +44,8 @@ Then reference skills automatically when writing landing page copy, email sequen
 3. `docs/VIDEO_FEATURES.md` ← video generation spec (read before any video work)
 4. `docs/SETUP_INSTRUCTIONS.md` ← deployment guide
 5. `docs/BRAND_PROFILE_FEATURE.md` ← Brand Profile feature — all 15 items DONE
-6. `docs/WAN_VIDEO_UPGRADE.md` ← ⭐ NEXT BUILD: Wan 2.2 replaces LTX-Video — read before any modal_video.py work
-7. `docs/TUTORIAL_STUDIO.md` ← ⭐ NEXT BUILD: Chrome extension for YouTube tutorial generation
+6. `docs/WAN_VIDEO_UPGRADE.md` ← Wan 2.2 TI2V-5B is implemented in `backend/modal_video.py` (model `Wan-AI/Wan2.2-TI2V-5B`, A10G GPU, app name `launchbusiness-wan-video`) — read this doc only if touching `modal_video.py`, or to verify `modal deploy` has been run and `MODAL_APP_NAME` is set in prod secrets
+7. `docs/TUTORIAL_STUDIO.md` ← Tutorial Studio is implemented — `extension/` has manifest.json/background.js/popup.html/popup.js/icons, `POST /api/tutorial/process` exists in server.py, and `TutorialStudio.js` is built. Read this doc for spec/UX details or to verify Chrome Web Store submission status
 
 ---
 
@@ -56,11 +56,11 @@ Backend     → FastAPI 0.110.1 (Python 3.11) — server.py is the entire backen
 Frontend    → React 19 + Tailwind CSS 3.4 + Shadcn/UI + React Router DOM 7.5.1
 Database    → MongoDB (Motor async driver) — resilient, works without it
 AI / LLM    → Google Gemini 2.5 Flash (google-genai SDK — NOT google-generativeai)
-TTS         → gTTS (current) → Edge TTS planned (free, neural voices, no key)
-Video       → FFmpeg + Pillow (CPU only — no GPU on VPS)
+TTS         → Edge TTS (Microsoft Neural, primary, free, no key) → gTTS fallback if Edge fails
+Video       → FFmpeg + Pillow (CPU, VPS) + Modal A10G GPU (Wan 2.2 TI2V-5B) for branded AI clips
 Scraping    → BeautifulSoup4 + httpx (verify=False for SSL compat)
 Auth        → JWT (jose) + bcrypt + beta agreement modal
-Payments    → Stripe (in code, not yet active)
+Payments    → Stripe — subscriptions, webhooks, usage-limit enforcement, coupons all wired; verify live keys/price IDs are set in prod secrets
 Ports       → Backend: 8001, Frontend: 3000
 Proxy       → Nginx (SSL + reverse proxy, Let's Encrypt cert)
 Deployment  → Docker Compose (4 containers: mongo, backend, frontend, nginx)
@@ -127,80 +127,34 @@ Magic Button response: 2 videos + 2 scripts + 2 posters
 
 ## STEP 6 — CURRENT PRIORITIES
 
-### Status: Live in production. Quality upgrade phase.
+### Status: Core roadmap is code-complete. Focus is deployment verification + AppSumo launch.
 
-Full strategy in `docs/PRODUCT_STRATEGY.md`. Implementation order:
+Full strategy in `docs/PRODUCT_STRATEGY.md`.
 
-### Priority 1 — Edge TTS (DO THIS FIRST)
-Replace gTTS with edge-tts (Microsoft Neural voices, free, no API key).
-Biggest single quality improvement. 2 hours of work.
-```python
-import edge_tts
-communicate = edge_tts.Communicate(text, voice="en-US-AndrewNeural")
-await communicate.save(output_path)
-```
-Install: `pip install edge-tts` (add to requirements.txt)
-The voice sounds like a real human presenter. gTTS sounds like 2003.
+### ✅ DONE — Quality & Platform Roadmap (Priorities 1–7)
+All of the following are implemented in `backend/server.py` / `backend/modal_video.py` /
+`backend/modal_sadtalker.py`. Do not re-build these — only fix bugs if found:
 
-### Priority 2 — Pillow Slide Design System
-Replace single-caption gradient with 6 structured slide templates:
-- Slide 1: Hero (product name + headline, strong contrast)
-- Slide 2: Problem (pain point, emotional)
-- Slide 3: Solution (product name + value prop)
-- Slide 4: Features (3 checkmarks from scraped data)
-- Slide 5: How it works (numbered steps)
-- Slide 6: CTA (URL, urgency)
-Each slide: proper typography hierarchy, brand colors, decorative elements.
+1. **Edge TTS** — Microsoft Neural voiceover (`en-US-AndrewNeural`) is primary; gTTS is the fallback if Edge fails
+2. **Pillow Slide Design System** — 6 structured templates (Hero, Problem, Solution, Features, How It Works, CTA) with brand colors + logo overlay
+3. **Crossfade Transitions** — FFmpeg `xfade` between slides (0.5s fade)
+4. **Watermark** — burned into slide content area (not a corner overlay), free tier only
+5. **Stripe Subscriptions** — checkout, webhooks, usage-limit enforcement, coupons all wired (Free: 3 lifetime gens / Starter $19 mo: 15 / Pro $49 mo: 50 + talking head / Agency $149 mo: 200 + team + white label)
+6. **Modal Wan 2.2 TI2V-5B** — `backend/modal_video.py` uses model `Wan-AI/Wan2.2-TI2V-5B`, GPU A10G, app name `launchbusiness-wan-video`, takes the Hero Pillow slide PNG as image input. Decision history in `docs/WAN_VIDEO_UPGRADE.md`.
+7. **SadTalker Talking Head** — `backend/modal_sadtalker.py` implemented with Stripe Identity verification gate, DeepFace check, "AI GENERATED" label burn-in, and timestamped consent tracking
+8. **Tutorial Studio** — `extension/` (Chrome Manifest V3: manifest.json, background.js, popup.html, popup.js, icons), `POST /api/tutorial/process` (server.py), and `TutorialStudio.js` all built. Full spec in `docs/TUTORIAL_STUDIO.md`.
 
-### Priority 3 — Crossfade Transitions
-FFmpeg xfade filter between slides. Makes video feel polished.
-Replace hard-cut concat with xfade=transition=fade:duration=0.5
+### 🔜 ACTUAL NEXT STEPS — Verification & Activation (not new builds)
 
-### Priority 4 — Watermark in Slide Design
-Burn "SwiftPack AI" into slide template content area (not corner).
-Integrated into design — cropping destroys content, not just watermark.
-Corner watermarks are useless (users crop in 5 seconds).
+The code above exists; what needs confirming is production *activation*:
 
-### Priority 5 — Stripe Subscription Enforcement
-- Free: 3 lifetime generations (not per month)
-- Starter $19/mo: 15 gens
-- Pro $49/mo: 50 gens + talking head
-- Agency $149/mo: 200 gens + team + white label
-Stripe is already in the codebase — just needs activation + limit logic.
+1. **Wan 2.2 deployment** — confirm `modal deploy backend/modal_video.py` has been run and `MODAL_APP_NAME=launchbusiness-wan-video` is set in `/root/secrets/swiftpack.env`
+2. **Stripe live keys** — confirm `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the Starter/Pro/Agency price IDs are set in prod secrets (subscription code is done, just needs keys)
+3. **SadTalker deployment** — confirm `modal deploy backend/modal_sadtalker.py` has run and Stripe Identity is activated
+4. **Tutorial Studio extension** — confirm the Chrome extension has been sideload-tested and/or submitted to the Chrome Web Store
 
-### Priority 6 — Modal + Wan 2.2 TI2V-5B (GPU Video for All Paid Tiers)
-REPLACING LTX-Video with Wan 2.2 TI2V-5B. Full decision in docs/WAN_VIDEO_UPGRADE.md.
-
-What to do:
-- Rewrite `backend/modal_video.py` — new model Wan-AI/Wan2.2-TI2V-5B, new GPU A10G (not A100), new APP_NAME "launchbusiness-wan-video"
-- Add image input parameter: accepts Hero Pillow slide PNG bytes as starting frame
-- Update `server.py` line 129: MODAL_APP_NAME default → "launchbusiness-wan-video"
-- Deploy: `modal deploy backend/modal_video.py`
-- Set in secrets: MODAL_APP_NAME=launchbusiness-wan-video
-
-WHY: Wan 2.2 takes our existing Hero slide as input → animates actual branded content (not generic footage). Cost drops from $0.44 to $0.03/clip (14× cheaper). Fits A10G not A100. All paid tiers (Starter/Pro/Agency) get AI video — not just Pro.
-
-### Priority 7 — Tutorial Studio (Chrome Extension + Server Endpoint)
-Full spec in docs/TUTORIAL_STUDIO.md. Build after Wan 2.2 is deployed.
-
-What to build:
-1. `extension/` folder — 4 files: manifest.json (Manifest V3, tabCapture permission), background.js (getMediaStreamId), popup.html (Record/Stop UI), popup.js (MediaRecorder + upload)
-2. `backend/server.py` — new endpoint POST /api/tutorial/process: receives WebM, extracts frames with FFmpeg, Gemini Vision narrates each frame, Edge TTS voices narration, _build_slideshow_ffmpeg assembles 16:9 tutorial
-3. `frontend/src/components/TutorialStudio.js` — extension download + processing status
-
-WHY: Founders need YouTube tutorial videos showing their real product. The Magic Button makes ad slideshows — those don't work for tutorials. The extension records the real dashboard (already logged in) and auto-generates a polished tutorial. No competitor does this at our price point.
-
-### Priority 7 — SadTalker Talking Head (Pro Feature)
-User uploads portrait photo → lip-synced talking head video.
-MUST have before launch:
-  - Stripe Identity ID verification ($1.50/user)
-  - DeepFace check against known public figures
-  - "AI GENERATED" label burned into all talking head videos
-  - Explicit consent checkbox (timestamped in DB)
-  - EU AI Act compliance
-
-### Priority 8 — AppSumo Lifetime Deal
-Only after Priority 1-5 complete (product must look good before LTD).
+### Priority 8 — AppSumo Lifetime Deal (still pending)
+Only after the verification items above are confirmed (product must be fully live before LTD).
 LTD Tier 1: $79 / 15 gens per month forever
 LTD Tier 2: $149 / 50 gens per month forever
 Cap: 500 codes total. AppSumo takes 30%, you keep 70%.
@@ -225,31 +179,18 @@ GET  /api/gallery                  List generated content
 
 ## STEP 8 — FRONTEND COMPONENTS
 
-```
-frontend/src/components/
-├── Dashboard.js       ← Magic Button + URL input (PRIMARY SCREEN)
-├── ScriptGenerator.js ← Manual script creation
-├── CreateContent.js   ← Video + poster creator
-├── AssetUpload.js     ← File upload manager
-├── Gallery.js         ← Generated content + downloads
-└── Layout.js          ← Nav wrapper
-```
+See `docs/PROJECT_SUMMARY.md` → "Key Files" for the current, maintained list of frontend
+components (Dashboard, BrandProfiles, LogoCreator, LegalDocs + `legal/*`, TutorialStudio,
+Pricing, `auth/*`, `context/AuthContext.js`, etc.). Don't duplicate that list here — update
+`PROJECT_SUMMARY.md` instead so it doesn't drift out of sync again.
 
 ---
 
 ## STEP 9 — ENVIRONMENT VARIABLES
 
-```env
-# backend/.env
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=jobhuntpro_db
-CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
-GEMINI_API_KEY=your-paid-gemini-key
-GOOGLE_APPLICATION_CREDENTIALS=/app/backend/gcloud-tts-key.json
-
-# frontend/.env
-REACT_APP_BACKEND_URL=http://localhost:8001
-```
+See `docs/PROJECT_SUMMARY.md` → "Environment Variables" for the full, current list (Mongo,
+Gemini, JWT, Stripe, Modal, Pexels, Google Safe Browsing, etc.). Don't duplicate that list here —
+update `PROJECT_SUMMARY.md` instead so it doesn't drift out of sync again.
 
 ---
 
@@ -264,7 +205,7 @@ curl -X POST http://localhost:8001/api/magic-launch-pack \
 
 # Test health
 curl http://localhost:8001/api/
-# Must return: {"message": "JobHuntPro Content Studio API"}
+# Must return: {"message": "LaunchBusiness AI API"}
 ```
 
 ---
@@ -363,7 +304,7 @@ Mother monitors Content Studio via:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jobhuntpro_marketing** (1513 symbols, 4379 relationships, 85 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jobhuntpro_marketing** (1522 symbols, 4521 relationships, 85 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

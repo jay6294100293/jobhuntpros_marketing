@@ -1,5 +1,8 @@
 # LaunchBusiness AI — Wan 2.2 Video Model Upgrade
-# Decision made: June 2026 | Status: PLANNED — build alongside Tutorial Studio
+# Decision made: June 2026 | Status: ✅ Implemented — backend/modal_video.py uses model
+# Wan-AI/Wan2.2-TI2V-5B, GPU A10G, app name launchbusiness-wan-video. Verify `modal deploy
+# backend/modal_video.py` has been run and MODAL_APP_NAME=launchbusiness-wan-video is set in
+# /root/secrets/swiftpack.env in production.
 
 ---
 
