@@ -26,7 +26,7 @@ const BrandSwitcher = () => {
     return (
       <Link
         to="/brands"
-        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
+        className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors"
       >
         <Plus className="w-3.5 h-3.5" /> Add a brand
       </Link>
@@ -34,7 +34,7 @@ const BrandSwitcher = () => {
   }
 
   return (
-    <div ref={ref} className="relative hidden sm:block">
+    <div ref={ref} className="relative hidden lg:block">
       <button
         onClick={() => setOpen(v => !v)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:border-zinc-600 transition-colors max-w-[180px]"
@@ -113,17 +113,18 @@ export const Layout = ({ children }) => {
 
       <nav className="relative border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3" data-testid="app-title">
+          <div className="flex flex-wrap items-center justify-between gap-y-2 py-3 lg:py-0 lg:h-16">
+            <div className="flex items-center gap-3 shrink-0 order-1" data-testid="app-title">
               <img
                 src="/logo_white.png"
                 alt="LaunchBusiness AI — Logo, Marketing, Legal. All AI"
-                style={{ height: 48, width: 'auto', display: 'block', flexShrink: 0 }}
+                className="h-8 sm:h-12 w-auto shrink-0"
+                style={{ display: 'block' }}
               />
               <BrandSwitcher />
             </div>
 
-            <div className="flex gap-1">
+            <div className="flex gap-1 order-3 w-full justify-center lg:order-2 lg:w-auto lg:justify-start">
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = item.match
@@ -141,13 +142,13 @@ export const Layout = ({ children }) => {
                     }`}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className="text-sm font-medium hidden md:inline">{item.name}</span>
+                    <span className="text-sm font-medium hidden lg:inline">{item.name}</span>
                   </Link>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 order-2 lg:order-3">
               {user ? (
                 <>
                   <Link
@@ -164,7 +165,7 @@ export const Layout = ({ children }) => {
                       <><Tag className="w-3 h-3" /> Free</>
                     )}
                   </Link>
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700">
+                  <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
                       {(user.name || user.email)[0].toUpperCase()}
                     </div>

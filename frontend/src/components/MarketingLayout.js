@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sparkles, Wand2, Upload, FolderOpen } from 'lucide-react';
 
@@ -13,12 +13,17 @@ const TABS = [
 
 export const MarketingLayout = ({ children }) => {
   const location = useLocation();
+  const activeTabRef = useRef(null);
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [location.pathname]);
 
   return (
     <div>
       <div className="border-b border-zinc-800/70 bg-zinc-900/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
             {TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = location.pathname === tab.href;
@@ -26,6 +31,7 @@ export const MarketingLayout = ({ children }) => {
                 <Link
                   key={tab.href}
                   to={tab.href}
+                  ref={isActive ? activeTabRef : null}
                   data-testid={`marketing-tab-${tab.name.toLowerCase().replace(/\s+/g, '-')}`}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive

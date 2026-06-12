@@ -240,7 +240,7 @@ function ProfileFormModal({ initial, onSave, onClose, saving }) {
           {/* Business context */}
           <div>
             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Business Context <span className="text-zinc-600 normal-case font-normal">(feeds Legal Documents)</span></p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Business type</label>
                 <select className={inputCls} value={form.business_type || 'SaaS'}
@@ -262,7 +262,7 @@ function ProfileFormModal({ initial, onSave, onClose, saving }) {
                   {REVENUE_MODELS.map(r => <option key={r}>{r}</option>)}
                 </select>
               </div>
-              <div className="col-span-3">
+              <div className="sm:col-span-3">
                 <label className={labelCls}>Data practices (optional — for Privacy Policy generation)</label>
                 <input className={inputCls} value={form.data_practices || ''}
                        onChange={e => set('data_practices', e.target.value)}

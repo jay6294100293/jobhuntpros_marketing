@@ -63,3 +63,13 @@
     background-image: url('https://grainy-gradients.vercel.app/noise.svg');
     z-index: 1;
 }
+
+/* Hide scrollbar for horizontally-scrollable nav/tab strips while keeping
+   touch/drag scroll usable on narrow viewports. */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}

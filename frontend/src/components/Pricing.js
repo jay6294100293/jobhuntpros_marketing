@@ -213,19 +213,19 @@ export const Pricing = () => {
             <Gift className="w-5 h-5 text-indigo-400" />
             <h3 className="text-sm font-semibold text-zinc-200">Have a gift or promo code?</h3>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={couponCode}
               onChange={e => setCouponCode(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleRedeemCoupon()}
               placeholder="Enter code (e.g. TESTER01)"
-              className="flex-1 bg-zinc-800/60 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 text-sm tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 placeholder-zinc-500 placeholder:tracking-normal placeholder:font-sans"
+              className="w-full sm:flex-1 min-w-0 bg-zinc-800/60 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 text-sm tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 placeholder-zinc-500 placeholder:tracking-normal placeholder:font-sans"
             />
             <button
               onClick={handleRedeemCoupon}
               disabled={couponLoading || !couponCode.trim()}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap"
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
               Apply

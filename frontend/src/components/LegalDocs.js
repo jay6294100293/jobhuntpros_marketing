@@ -299,7 +299,7 @@ export default function LegalDocs() {
 
       {/* ── Chat intake ── */}
       {view === 'chat' && activeProfile && (
-        <div className="max-w-3xl mx-auto h-[680px] flex flex-col">
+        <div className="max-w-3xl mx-auto h-[500px] sm:h-[680px] flex flex-col">
           <ChatIntake
             profile={activeProfile}
             onIntakeComplete={handleIntakeComplete}

@@ -168,14 +168,14 @@ export const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-[800px] h-[400px] bg-indigo-600/10 blur-[100px] rounded-full pointer-events-none" />
 
       {/* ── Brand Hub — compact status bar ────────────────────────────── */}
       <div className="relative z-10 max-w-3xl mx-auto mb-6">
-        <div className="flex items-stretch gap-0 bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-stretch gap-0 bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
 
           {/* Brand Identity */}
-          <Link to="/logo" className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors border-r border-zinc-800 group min-w-0">
+          <Link to="/logo" className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors border-b sm:border-b-0 sm:border-r border-zinc-800 group min-w-0">
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center flex-shrink-0">
               <Palette className="w-3.5 h-3.5 text-white" />
             </div>
@@ -191,7 +191,7 @@ export const Dashboard = () => {
           {/* Marketing */}
           <button
             onClick={() => document.getElementById('magic-button-section')?.scrollIntoView({ behavior: 'smooth' })}
-            className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-indigo-950/40 transition-colors border-r border-zinc-800 group min-w-0">
+            className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-indigo-950/40 transition-colors border-b sm:border-b-0 sm:border-r border-zinc-800 group min-w-0">
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center flex-shrink-0">
               <Megaphone className="w-3.5 h-3.5 text-white" />
             </div>
