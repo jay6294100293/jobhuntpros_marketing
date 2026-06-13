@@ -375,6 +375,31 @@ export const Dashboard = () => {
               )}
             </div>
 
+            {/* Pre-wall nudge for free tier users */}
+            {user?.tier === 'free' && (() => {
+              const used = user?.usage?.videos ?? 0;
+              const remaining = Math.max(0, 3 - used);
+              if (remaining === 1) return (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-sm">
+                  <span className="text-amber-400 mt-0.5">⚠</span>
+                  <span className="text-amber-300">
+                    <strong>Last free generation.</strong> After this you'll need to{' '}
+                    <Link to="/pricing" className="underline hover:text-amber-200">upgrade to Starter ($19/mo)</Link> to keep creating.
+                  </span>
+                </div>
+              );
+              if (remaining === 0) return (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-red-500/30 bg-red-500/5 text-sm">
+                  <span className="text-red-400 mt-0.5">✕</span>
+                  <span className="text-red-300">
+                    <strong>Free limit reached (3/3).</strong>{' '}
+                    <Link to="/pricing" className="underline hover:text-red-200">Upgrade to Starter</Link> for 15 generations per month.
+                  </span>
+                </div>
+              );
+              return null;
+            })()}
+
             <button
               onClick={handleMagicButton}
               disabled={loading}

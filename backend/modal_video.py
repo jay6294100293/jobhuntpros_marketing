@@ -63,7 +63,7 @@ RESOLUTION_SHORT = {
 
 
 @app.cls(
-    gpu=modal.gpu.A10G(),
+    gpu="A10G",
     image=wan_image,
     volumes={"/weights": weights_volume},
     timeout=300,

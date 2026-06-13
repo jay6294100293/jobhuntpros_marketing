@@ -143,7 +143,7 @@ def check_face(portrait_bytes: bytes) -> dict:
 
 # ── 2. SadTalker talking head (GPU) ───────────────────────────────────────────
 @app.cls(
-    gpu=modal.gpu.A10G(),
+    gpu="A10G",
     image=sadtalker_image,
     volumes={"/weights": sadtalker_volume},
     timeout=300,

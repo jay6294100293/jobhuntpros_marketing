@@ -136,9 +136,16 @@ PEXELS_API_KEY = os.getenv('PEXELS_API_KEY', '')
 GOOGLE_SAFE_BROWSING_API_KEY = os.getenv('GOOGLE_SAFE_BROWSING_API_KEY', '')
 
 # ── MongoDB ────────────────────────────────────────────────────────────────────
-mongo_url = os.environ['MONGODB_URL']
+_mongo_url = os.getenv('MONGODB_URL')
+_db_name   = os.getenv('DB_NAME')
+if not _mongo_url or not _db_name:
+    raise RuntimeError(
+        "MONGODB_URL and DB_NAME must be set in environment. "
+        "Check /root/secrets/swiftpack.env (prod) or backend/.env (local)."
+    )
+mongo_url = _mongo_url
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[_db_name]
 
 UPLOADS_DIR = ROOT_DIR / 'uploads'
 OUTPUTS_DIR = ROOT_DIR / 'outputs'
@@ -486,11 +493,40 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup_db_client():
+    # ── Warn about insecure defaults ───────────────────────────────────────────
+    if JWT_SECRET == 'dev-jwt-secret-change-in-production':
+        logger.warning("SECURITY: JWT_SECRET is using the insecure default. Set a strong secret in production!")
+    if not STRIPE_SECRET_KEY:
+        logger.warning("BILLING: STRIPE_SECRET_KEY is not set — payments are disabled.")
+    if not MODAL_TOKEN_ID:
+        logger.warning("GPU: MODAL_TOKEN_ID not set — GPU video generation disabled for paid tiers.")
+    if not PEXELS_API_KEY:
+        logger.warning("PEXELS: PEXELS_API_KEY not set — B-roll backgrounds disabled.")
+    if not list(MUSIC_BEDS_DIR.glob("*.mp3")):
+        logger.warning("MUSIC: No .mp3 files in assets/music_beds/ — background music disabled for all tiers.")
+
+    # ── MongoDB ping ───────────────────────────────────────────────────────────
     try:
         await db.command("ping")
         logger.info("MongoDB connection: OK")
     except Exception as e:
         logger.error(f"MongoDB connection failed on startup: {e}")
+        return
+
+    # ── Indexes (idempotent — safe to re-run on every restart) ─────────────────
+    try:
+        await db.users.create_index("id",       unique=True, background=True)
+        await db.users.create_index("email",    unique=True, background=True)
+        await db.usage.create_index([("user_id", 1), ("year_month", 1)], unique=True, background=True)
+        await db.legal_documents.create_index("user_id",  background=True)
+        await db.legal_documents.create_index("profile_id", background=True)
+        await db.legal_profiles.create_index("user_id",   background=True)
+        await db.legal_credits_usage.create_index([("user_id", 1), ("year_month", 1)], unique=True, background=True)
+        await db.legal_chat.create_index("profile_id",    background=True)
+        await db.logos.create_index("user_id",             background=True)
+        logger.info("MongoDB indexes: OK")
+    except Exception as e:
+        logger.error(f"MongoDB index creation failed: {e}")
 
 
 api_router = APIRouter(prefix="/api")

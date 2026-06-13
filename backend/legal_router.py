@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import uuid
 import json
 import re
+import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
@@ -182,26 +183,43 @@ async def _deduct_credits(user_id: str, amount: int, from_topup: bool = False) -
 
 # ─── Web search for latest legal context ──────────────────────────────────────
 
+_DDG_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+]
+
 async def _search_legal_context(doc_type: str, jurisdiction: str) -> str:
-    """Search DuckDuckGo for latest legal requirements for a given document type + jurisdiction."""
+    """Search DuckDuckGo for latest legal requirements — retries with backoff on rate-limit."""
     query = f"{doc_type} legal requirements {jurisdiction} 2026"
-    try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True, verify=False) as client:
-            r = await client.get(
-                "https://duckduckgo.com/html/",
-                params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0 (compatible; LaunchBusinessAI/1.0)"},
-            )
-        soup = BeautifulSoup(r.text, "html.parser")
-        snippets = []
-        for result in soup.select("div.result__body")[:4]:
-            title_el = result.select_one("a.result__a")
-            snippet_el = result.select_one(".result__snippet")
-            if title_el and snippet_el:
-                snippets.append(f"• {title_el.get_text(strip=True)}: {snippet_el.get_text(strip=True)}")
-        return "\n".join(snippets) if snippets else "No specific recent updates found. Apply standard requirements."
-    except Exception:
-        return "Web search unavailable. Apply standard requirements for this jurisdiction."
+    for attempt in range(3):
+        try:
+            ua = _DDG_USER_AGENTS[attempt % len(_DDG_USER_AGENTS)]
+            async with httpx.AsyncClient(timeout=12, follow_redirects=True, verify=False) as client:
+                r = await client.get(
+                    "https://duckduckgo.com/html/",
+                    params={"q": query},
+                    headers={"User-Agent": ua, "Accept-Language": "en-US,en;q=0.9"},
+                )
+            if r.status_code == 429:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            soup = BeautifulSoup(r.text, "html.parser")
+            snippets = []
+            for result in soup.select("div.result__body")[:5]:
+                title_el   = result.select_one("a.result__a")
+                snippet_el = result.select_one(".result__snippet")
+                if title_el and snippet_el:
+                    snippets.append(f"• {title_el.get_text(strip=True)}: {snippet_el.get_text(strip=True)}")
+            if snippets:
+                return "\n".join(snippets)
+            # empty result — DDG may have returned a captcha page; retry
+            await asyncio.sleep(1.5 * (attempt + 1))
+        except Exception:
+            if attempt == 2:
+                break
+            await asyncio.sleep(2 ** attempt)
+    return "Web search unavailable. Apply standard requirements for this jurisdiction."
 
 # ─── Gemini call helper ───────────────────────────────────────────────────────
 

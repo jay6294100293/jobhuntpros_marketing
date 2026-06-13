@@ -1,11 +1,14 @@
 ﻿import React, { useState } from 'react';
-import { Check, Zap, Loader2, Gift, Tag } from 'lucide-react';
+import { Check, Zap, Loader2, Gift, Tag, Clock } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Mark a feature as "coming soon" by wrapping it in this helper
+const soon = (label) => ({ label, soon: true });
 
 // Matches backend server.py TIER_CONFIG exactly
 const plans = [
@@ -36,8 +39,8 @@ const plans = [
       '50 posters per month',
       'All formats (9:16, 16:9, 1:1)',
       'No watermark',
-      'Background music bed',
-      'Tutorial Studio (Chrome extension)',
+      soon('Background music bed'),
+      soon('Tutorial Studio (Chrome extension)'),
     ],
     cta: 'Upgrade to Starter',
     highlight: true,
@@ -52,9 +55,9 @@ const plans = [
       '50 videos per month',
       '200 scripts per month',
       '200 posters per month',
-      'GPU-accelerated cinematic AI video',
-      'Tutorial Studio (Chrome extension)',
-      'Talking head feature',
+      soon('GPU-accelerated cinematic AI video'),
+      soon('Tutorial Studio (Chrome extension)'),
+      soon('Talking head feature'),
       'Priority rendering queue',
     ],
     cta: 'Upgrade to Pro',
@@ -69,7 +72,7 @@ const plans = [
     features: [
       '200 videos per month',
       'Unlimited scripts + posters',
-      'All AI video features',
+      soon('All AI video features'),
       'Team seats',
       'White label option',
       'Priority support',
@@ -168,12 +171,26 @@ export const Pricing = () => {
               </div>
 
               <ul className="space-y-2.5 mb-6 flex-1">
-                {plan.features.map(f => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-zinc-300">
-                    <Check className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                    {f}
-                  </li>
-                ))}
+                {plan.features.map((f, i) => {
+                  const isSoon = typeof f === 'object' && f.soon;
+                  const label  = isSoon ? f.label : f;
+                  return (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      {isSoon
+                        ? <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        : <Check className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                      }
+                      <span className={isSoon ? 'text-zinc-500' : 'text-zinc-300'}>
+                        {label}
+                        {isSoon && (
+                          <span className="ml-1.5 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full align-middle">
+                            SOON
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
 
               {plan.tier === 'free' ? (
