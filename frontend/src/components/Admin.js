@@ -362,30 +362,73 @@ const CouponsTab = () => {
     try { await axios.delete(api(`/coupons/${code}`)); toast.success('Deactivated'); load(); }
     catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
+  const DURATIONS = [[7, '7 days'], [30, '1 month'], [90, '3 months'], [180, '6 months'], [365, '1 year']];
+  const PLAN_LABEL = { starter: 'Starter ($19/mo plan)', pro: 'Pro ($49/mo plan)', agency: 'Agency ($149/mo plan)' };
+  const durLabel = (DURATIONS.find(d => String(d[0]) === String(form.duration_days)) || [form.duration_days, `${form.duration_days} days`])[1];
+  const Field = ({ label, hint, children }) => (
+    <label className="block">
+      <span className="block text-sm font-medium text-zinc-300">{label}</span>
+      <span className="block text-xs text-zinc-500 mb-1.5">{hint}</span>
+      {children}
+    </label>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <div className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">New coupon</div>
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 items-end">
-          <input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="CODE" className={`px-2.5 py-2 ${inputCls}`} />
-          <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })} className={`px-2.5 py-2 ${inputCls}`}>
-            {['starter', 'pro', 'agency'].map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <input type="number" value={form.duration_days} onChange={e => setForm({ ...form, duration_days: e.target.value })} placeholder="days" className={`px-2.5 py-2 ${inputCls}`} />
-          <input type="number" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })} placeholder="max uses" className={`px-2.5 py-2 ${inputCls}`} />
-          <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="note" className={`px-2.5 py-2 ${inputCls}`} />
-          <button onClick={create} className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /> Create</button>
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="mb-1 text-sm font-semibold text-white">Create a coupon</div>
+        <p className="mb-5 text-sm text-zinc-500">Give someone a paid plan for free, for a limited time.</p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Coupon code" hint="What the person types to redeem it.">
+            <input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
+              placeholder="e.g. LAUNCH50" className={`w-full px-3 py-2 font-mono ${inputCls}`} />
+          </Field>
+
+          <Field label="Plan they unlock" hint="Which paid plan the code activates.">
+            <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })} className={`w-full px-3 py-2 ${inputCls}`}>
+              {['starter', 'pro', 'agency'].map(t => <option key={t} value={t}>{PLAN_LABEL[t]}</option>)}
+            </select>
+          </Field>
+
+          <Field label="How long it lasts" hint="When it ends, the account drops back to Free.">
+            <select value={form.duration_days} onChange={e => setForm({ ...form, duration_days: Number(e.target.value) })} className={`w-full px-3 py-2 ${inputCls}`}>
+              {DURATIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Number of people who can use it" hint="Total redemptions allowed across everyone.">
+            <input type="number" min="1" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })}
+              placeholder="e.g. 5" className={`w-full px-3 py-2 ${inputCls}`} />
+          </Field>
+
+          <Field label="Private note (optional)" hint="A reminder for you. Customers never see this.">
+            <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}
+              placeholder="e.g. Twitter giveaway" className={`w-full px-3 py-2 ${inputCls}`} />
+          </Field>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-zinc-400">
+            <Tag className="inline w-3.5 h-3.5 mr-1 -mt-0.5 text-indigo-400" />
+            <span className="font-mono text-zinc-200">{form.code || 'CODE'}</span> unlocks{' '}
+            <span className="text-zinc-200">{form.tier}</span> for <span className="text-zinc-200">{durLabel}</span>,
+            for up to <span className="text-zinc-200">{form.max_uses || 0}</span> {Number(form.max_uses) === 1 ? 'person' : 'people'}.
+          </p>
+          <button onClick={create} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium flex items-center justify-center gap-1.5 shrink-0">
+            <Plus className="w-4 h-4" /> Create coupon
+          </button>
         </div>
       </div>
-      <Table head={[{ label: 'Code' }, { label: 'Tier' }, { label: 'Days' }, { label: 'Uses' }, { label: 'Note' }, { label: '', right: true }]}>
+      <Table head={[{ label: 'Code' }, { label: 'Plan' }, { label: 'Duration' }, { label: 'Redeemed' }, { label: 'Note' }, { label: '', right: true }]}>
         {coupons.map(c => (
           <tr key={c.code} className={`hover:bg-zinc-900/40 transition-colors ${!c.is_active ? 'opacity-40' : ''}`}>
-            <td className="px-4 py-3 font-mono text-zinc-100">{c.code}</td>
+            <td className="px-4 py-3 font-mono text-zinc-100">{c.code}{!c.is_active && <span className="ml-2 text-xs text-zinc-500">(inactive)</span>}</td>
             <td className="px-4 py-3"><Badge kind={c.tier} /></td>
-            <td className="px-4 py-3 text-zinc-400 tabular-nums">{c.duration_days}</td>
-            <td className="px-4 py-3 text-zinc-400 tabular-nums">{c.used_count}/{c.max_uses}</td>
+            <td className="px-4 py-3 text-zinc-400 tabular-nums">{c.duration_days} days</td>
+            <td className="px-4 py-3 text-zinc-400 tabular-nums">{c.used_count} of {c.max_uses}</td>
             <td className="px-4 py-3 text-zinc-500">{c.note || '—'}</td>
-            <td className="px-4 py-3 text-right">{c.is_active && <button onClick={() => deactivate(c.code)} className={`text-rose-400 ${iconBtn}`}><Trash2 className="w-4 h-4" /></button>}</td>
+            <td className="px-4 py-3 text-right">{c.is_active && <button title="Deactivate" onClick={() => deactivate(c.code)} className={`text-rose-400 ${iconBtn}`}><Trash2 className="w-4 h-4" /></button>}</td>
           </tr>
         ))}
         {coupons.length === 0 && <Empty cols={6} text="No coupons yet" />}
