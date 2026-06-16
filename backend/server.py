@@ -218,6 +218,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if user.get("is_banned"):
+        raise HTTPException(status_code=403, detail="This account has been suspended.")
     # Auto-expire coupon-granted tier (only for users without an active Stripe subscription)
     if user.get("tier_expires_at") and not user.get("stripe_customer_id"):
         try:
@@ -4713,10 +4715,12 @@ async def process_tutorial_video(
 from jarvis_router import router as jarvis_router  # noqa: E402
 from legal_router import legal_router  # noqa: E402
 from brand_router import brand_router  # noqa: E402
+from admin_router import admin_panel_router  # noqa: E402
 
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(admin_panel_router)
 app.include_router(billing_router)
 app.include_router(talking_router)
 app.include_router(jarvis_router)

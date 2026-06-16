@@ -1,6 +1,6 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone, ChevronDown, Check, Plus } from 'lucide-react';
+import { Home, LogOut, Zap, Tag, Palette, Scale, Briefcase, Video, Megaphone, ChevronDown, Check, Plus, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBrand } from '../context/BrandContext';
 import { toast } from 'sonner';
@@ -99,6 +99,7 @@ export const Layout = ({ children }) => {
     { name: 'Marketing', href: '/create',    icon: Megaphone, match: MARKETING_PATHS },
     { name: 'Legal',     href: '/legal',     icon: Scale },
     { name: 'Tutorial',  href: '/tutorial',  icon: Video },
+    ...(user?.is_admin ? [{ name: 'Admin', href: '/admin', icon: ShieldCheck }] : []),
   ];
 
   const handleLogout = () => {
