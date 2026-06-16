@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
@@ -22,7 +22,7 @@ import { LogoCreator } from './components/LogoCreator';
 import LegalDocs from './components/LegalDocs';
 import { BrandProfiles } from './components/BrandProfiles';
 import { TutorialStudio } from './components/TutorialStudio';
-import { Admin } from './components/Admin';
+import { AdminRoute } from './components/Admin';
 import { MarketingLayout } from './components/MarketingLayout';
 import './App.css';
 
@@ -62,7 +62,6 @@ const ProtectedApp = () => {
         <Route path="/legal" element={<LegalDocs />} />
         <Route path="/brands" element={<BrandProfiles />} />
         <Route path="/tutorial" element={<TutorialStudio />} />
-        <Route path="/admin" element={user.is_admin ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="/pricing" element={<Pricing />} />
       </Routes>
     </Layout>
@@ -81,6 +80,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/admin/*" element={<AdminRoute />} />
             <Route path="/*" element={<ProtectedApp />} />
           </Routes>
           <Toaster

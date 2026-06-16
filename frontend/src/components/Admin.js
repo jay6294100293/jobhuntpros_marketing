@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 import {
   Users, DollarSign, Activity, Tag, Inbox, ShieldCheck, Search,
   Ban, Crown, KeyRound, RefreshCw, Trash2, Plus, Loader2,
   Film, Scale, Server, ScrollText, ShieldAlert, X, Check, Circle,
+  Lock, LogOut, ArrowLeft,
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -199,7 +202,7 @@ const UsersTab = () => {
             </td>
             <td className="px-3 py-2">
               <div className="flex items-center justify-end gap-1">
-                <button title={usr.is_admin ? 'Revoke admin' : 'Make admin'} onClick={() => patch(usr.id, { is_admin: !usr.is_admin }, usr.is_admin ? 'Admin revoked' : 'Now admin')} className="p-1.5 rounded hover:bg-zinc-800 text-amber-400"><Crown className="w-4 h-4" /></button>
+                <button title={usr.is_admin ? 'Revoke admin' : 'Make admin'} onClick={() => { if (window.confirm(usr.is_admin ? `Revoke admin access from ${usr.email}?` : `Grant admin access to ${usr.email}?`)) patch(usr.id, { is_admin: !usr.is_admin }, usr.is_admin ? 'Admin revoked' : 'Now admin'); }} className="p-1.5 rounded hover:bg-zinc-800 text-amber-400"><Crown className="w-4 h-4" /></button>
                 <button title={usr.is_banned ? 'Unban' : 'Ban'} onClick={() => patch(usr.id, { is_banned: !usr.is_banned }, usr.is_banned ? 'Unbanned' : 'Banned')} className="p-1.5 rounded hover:bg-zinc-800 text-red-400"><Ban className="w-4 h-4" /></button>
                 <button title="Reset password" onClick={() => resetPw(usr.id, usr.email)} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-300"><KeyRound className="w-4 h-4" /></button>
               </div>
@@ -449,10 +452,6 @@ export const Admin = () => {
   const Active = TABS.find(t => t.id === tab).el;
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center gap-2 mb-6">
-        <ShieldCheck className="w-6 h-6 text-indigo-400" />
-        <h1 className="text-2xl font-bold text-white">Admin</h1>
-      </div>
       <div className="flex gap-1 mb-6 border-b border-zinc-800 overflow-x-auto">
         {TABS.map(t => {
           const Icon = t.icon;
@@ -469,6 +468,84 @@ export const Admin = () => {
       <Active />
     </div>
   );
+};
+
+// ── Standalone admin area (separate from the public site) ───────────────────
+// /admin renders its OWN sign-in + not-authorized screens — it never falls back
+// to the marketing landing page or the main app shell.
+
+const AdminLogin = () => {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try { await login(email, password); }
+    catch (err) { toast.error(err.response?.data?.detail || 'Sign in failed'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 space-y-4">
+        <div className="flex items-center gap-2 text-indigo-400"><Lock className="w-5 h-5" /><span className="text-lg font-bold text-white">Admin Console</span></div>
+        <p className="text-sm text-zinc-500">Sign in with your admin account.</p>
+        <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"
+          className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:border-indigo-500 outline-none" />
+        <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"
+          className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:border-indigo-500 outline-none" />
+        <button disabled={busy} className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium disabled:opacity-50">
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+        <Link to="/" className="block text-center text-xs text-zinc-500 hover:text-zinc-300">← Back to site</Link>
+      </form>
+    </div>
+  );
+};
+
+const AdminDenied = () => {
+  const { user, logout } = useAuth();
+  return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 text-center space-y-4">
+        <ShieldAlert className="w-10 h-10 text-amber-400 mx-auto" />
+        <div className="text-lg font-bold text-white">Not authorized</div>
+        <p className="text-sm text-zinc-500">You're signed in as {user.email}, but this account doesn't have admin access.</p>
+        <div className="flex gap-2 justify-center pt-1">
+          <Link to="/" className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm">Back to app</Link>
+          <button onClick={logout} className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm">Sign out</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminShell = ({ children }) => {
+  const { user, logout } = useAuth();
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-50">
+      <header className="border-b border-zinc-800 bg-zinc-900/60">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-indigo-400" /><span className="font-bold">Admin Console</span></div>
+          <div className="flex items-center gap-3 text-sm">
+            <Link to="/" className="flex items-center gap-1 text-zinc-400 hover:text-white"><ArrowLeft className="w-4 h-4" /> App</Link>
+            <span className="text-zinc-500 hidden sm:inline">{user.email}</span>
+            <button onClick={logout} className="flex items-center gap-1 text-zinc-400 hover:text-white"><LogOut className="w-4 h-4" /> Sign out</button>
+          </div>
+        </div>
+      </header>
+      {children}
+    </div>
+  );
+};
+
+export const AdminRoute = () => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500"><Loader2 className="w-5 h-5 animate-spin" /></div>;
+  if (!user) return <AdminLogin />;
+  if (!user.is_admin) return <AdminDenied />;
+  return <AdminShell><Admin /></AdminShell>;
 };
 
 export default Admin;
