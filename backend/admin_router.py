@@ -54,7 +54,8 @@ async def _require_admin_user(credentials: HTTPAuthorizationCredentials = Securi
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    if not user.get("is_admin"):
+    from server import resolve_is_admin  # honors both DB flag and ADMIN_EMAILS
+    if not resolve_is_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 

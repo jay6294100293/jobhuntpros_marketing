@@ -109,6 +109,16 @@ BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'LaunchBusiness AI')
 
 ADMIN_SECRET = os.getenv('ADMIN_SECRET', '')
 
+# Emails that are ALWAYS admin (comma-separated). Designate owners here so they
+# get admin automatically on login — no bootstrap curl, survives DB resets.
+ADMIN_EMAILS = {e.strip().lower() for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()}
+
+def resolve_is_admin(user: dict) -> bool:
+    """A user is admin if flagged in the DB OR their email is in ADMIN_EMAILS."""
+    if not user:
+        return False
+    return bool(user.get("is_admin")) or (str(user.get("email", "")).lower() in ADMIN_EMAILS)
+
 # Tier limits — "lifetime": True means total-ever, False means per-calendar-month
 TIER_CONFIG = {
     "free":    {"videos": 3,   "scripts": 5,   "posters": 5,   "logos": 3,   "lifetime": True,  "formats": ["9:16"]},
@@ -3223,6 +3233,7 @@ async def register(req: RegisterRequest):
     await db.users.insert_one({**user, "_id": user_id})
     token = create_jwt(user_id)
     safe = {k: v for k, v in user.items() if k != "hashed_password"}
+    safe["is_admin"] = resolve_is_admin(user)
     return {"token": token, "user": safe}
 
 @auth_router.post("/login")
@@ -3233,7 +3244,12 @@ async def login(req: LoginRequest):
     if not verify_password(req.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_jwt(user["id"])
+    # Auto-grant admin for designated owner emails (persist so the panel reflects it)
+    if str(user.get("email", "")).lower() in ADMIN_EMAILS and not user.get("is_admin"):
+        await db.users.update_one({"id": user["id"]}, {"$set": {"is_admin": True}})
+        user["is_admin"] = True
     safe = {k: v for k, v in user.items() if k not in ("_id", "hashed_password")}
+    safe["is_admin"] = resolve_is_admin(user)
     return {"token": token, "user": safe}
 
 @auth_router.get("/me")
@@ -3261,7 +3277,13 @@ async def me(user = Depends(get_current_user)):
     limits = {k: cfg.get(k) for k in ("videos", "scripts", "posters")}
     remaining = {k: max(0, limits[k] - usage[k]) for k in limits}
 
+    # Auto-grant admin for designated owner emails (covers Google login; persist for the panel)
+    if str(user.get("email", "")).lower() in ADMIN_EMAILS and not user.get("is_admin"):
+        await db.users.update_one({"id": user["id"]}, {"$set": {"is_admin": True}})
+        user["is_admin"] = True
+
     safe = {k: v for k, v in user.items() if k != "hashed_password"}
+    safe["is_admin"] = resolve_is_admin(user)
     safe["usage"] = usage
     safe["limits"] = limits
     safe["remaining"] = remaining
