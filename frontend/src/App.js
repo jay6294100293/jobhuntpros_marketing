@@ -22,6 +22,7 @@ import { LogoCreator } from './components/LogoCreator';
 import LegalDocs from './components/LegalDocs';
 import { BrandProfiles } from './components/BrandProfiles';
 import { TutorialStudio } from './components/TutorialStudio';
+import { Admin } from './components/Admin';
 import { MarketingLayout } from './components/MarketingLayout';
 import './App.css';
 
@@ -61,6 +62,7 @@ const ProtectedApp = () => {
         <Route path="/legal" element={<LegalDocs />} />
         <Route path="/brands" element={<BrandProfiles />} />
         <Route path="/tutorial" element={<TutorialStudio />} />
+        <Route path="/admin" element={user.is_admin ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="/pricing" element={<Pricing />} />
       </Routes>
     </Layout>
