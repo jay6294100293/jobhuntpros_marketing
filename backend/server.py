@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse,
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -47,7 +48,8 @@ ROOT_DIR = Path(__file__).parent
 # Prefer external secrets file (never in git). Fall back to backend/.env for
 # local dev convenience. Load in priority order: first match wins for each var.
 _SECRETS_CANDIDATES = [
-    Path("/home/ubuntu/secrets/swiftpack.env"),   # Linux production server
+    Path("/root/secrets/swiftpack.env"),           # Contabo VPS (root) — current prod layout
+    Path("/home/ubuntu/secrets/swiftpack.env"),    # legacy ubuntu-user server layout
     Path("E:/secrets/swiftpack.env"),              # Windows local development
 ]
 for _sc in _SECRETS_CANDIDATES:
@@ -536,6 +538,10 @@ async def startup_db_client():
         await db.legal_credits_usage.create_index([("user_id", 1), ("year_month", 1)], unique=True, background=True)
         await db.legal_chat.create_index("profile_id",    background=True)
         await db.logos.create_index("user_id",             background=True)
+        # Payment ledger — supports reconciliation by event and by user.
+        # stripe_events needs no extra index: its _id IS the Stripe event id (unique).
+        await db.payment_transactions.create_index("event_id", background=True)
+        await db.payment_transactions.create_index("user_id",  background=True)
         logger.info("MongoDB indexes: OK")
     except Exception as e:
         logger.error(f"MongoDB index creation failed: {e}")
@@ -3696,6 +3702,59 @@ async def create_checkout_session(user = Depends(get_current_user)):
     return await _create_stripe_checkout(user, STRIPE_PRO_PRICE_ID, "pro")
 
 
+# ── Stripe webhook idempotency + payment ledger ───────────────────────────────
+# See docs/decisions/2026-06-21-stripe-webhook-idempotency-ledger.md
+#
+# DECISION: claim-first dedup. Stripe redelivers events on timeout/retry, and the
+# legal-topup path uses $inc — so a duplicate delivery would double-credit. We claim
+# the event by inserting its id into `stripe_events` (unique _id) BEFORE applying any
+# effect. DuplicateKeyError => already processed => skip.
+async def _claim_stripe_event(event: dict) -> bool:
+    """Atomically claim a Stripe event for processing.
+
+    Returns True if this is the first time we've seen it (proceed), False if it was
+    already processed (skip). Fails CLOSED: if the claim write errors for any reason
+    other than a duplicate (e.g. Mongo down), the exception propagates so the handler
+    500s and Stripe retries later — we must never apply a money effect we can't dedup.
+    """
+    try:
+        await db.stripe_events.insert_one({
+            "_id": event["id"],
+            "type": event.get("type"),
+            "received_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return True
+    except DuplicateKeyError:
+        return False
+
+
+async def _unclaim_stripe_event(event_id: str):
+    """Release a claim so Stripe's retry can reprocess after a transient failure."""
+    try:
+        await db.stripe_events.delete_one({"_id": event_id})
+    except Exception:
+        logger.error(f"Failed to release stripe_events claim {event_id}")
+
+
+async def _record_payment_transaction(event: dict, kind: str, **fields):
+    """Append one row to the payment_transactions ledger. Best-effort — a ledger
+    write must never break the user's upgrade, but is logged if it fails."""
+    try:
+        obj = event.get("data", {}).get("object", {})
+        await db.payment_transactions.insert_one({
+            "_id": str(uuid.uuid4()),
+            "event_id": event["id"],
+            "raw_event_type": event.get("type"),
+            "kind": kind,
+            "amount_total": obj.get("amount_total"),   # cents, may be None for subs
+            "currency": obj.get("currency"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            **fields,
+        })
+    except Exception as e:
+        logger.error(f"payment_transactions ledger write failed for {event.get('id')}: {e}")
+
+
 @billing_router.post("/webhook")
 async def stripe_webhook_handler(request: Request):
     if not stripe_lib or not STRIPE_WEBHOOK_SECRET:
@@ -3707,55 +3766,83 @@ async def stripe_webhook_handler(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
-    price_map = _price_id_to_tier()
+    # Idempotency gate — skip events we've already applied.
+    if not await _claim_stripe_event(event):
+        logger.info(f"Stripe event {event['id']} already processed — skipping (duplicate)")
+        return {"status": "ok", "duplicate": True}
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {})
-        user_id = metadata.get("user_id")
-        customer_id = session.get("customer")
+    # From here, the claim is held. If anything below raises, release the claim so
+    # Stripe's retry can reprocess — otherwise a transient error swallows the upgrade.
+    try:
+        price_map = _price_id_to_tier()
 
-        if metadata.get("type") == "legal_topup":
-            # ── Legal credit topup (one-time payment) ──
-            credits = int(metadata.get("credits", 0))
-            if user_id and credits > 0:
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$inc": {"legal_credits_topup": credits}}
-                )
-                logger.info(f"Legal topup: user {user_id} received {credits} credits")
-        else:
-            # ── Subscription upgrade ──
-            target_tier = metadata.get("target_tier", "pro")
-            if user_id:
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
-                )
-                logger.info(f"User {user_id} upgraded to {target_tier}")
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            metadata = session.get("metadata", {})
+            user_id = metadata.get("user_id")
+            customer_id = session.get("customer")
 
-    elif event["type"] == "customer.subscription.updated":
-        sub = event["data"]["object"]
-        customer_id = sub.get("customer")
-        items = sub.get("items", {}).get("data", [])
-        if customer_id and items:
-            price_id = items[0].get("price", {}).get("id", "")
-            new_tier = price_map.get(price_id)
-            if new_tier:
+            if metadata.get("type") == "legal_topup":
+                # ── Legal credit topup (one-time payment) ──
+                credits = int(metadata.get("credits", 0))
+                if user_id and credits > 0:
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$inc": {"legal_credits_topup": credits}}
+                    )
+                    logger.info(f"Legal topup: user {user_id} received {credits} credits")
+                    await _record_payment_transaction(
+                        event, "legal_topup", user_id=user_id,
+                        stripe_customer_id=customer_id, credits=credits,
+                    )
+            else:
+                # ── Subscription upgrade ──
+                target_tier = metadata.get("target_tier", "pro")
+                if user_id:
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
+                    )
+                    logger.info(f"User {user_id} upgraded to {target_tier}")
+                    await _record_payment_transaction(
+                        event, "subscription_upgrade", user_id=user_id,
+                        stripe_customer_id=customer_id, tier=target_tier,
+                    )
+
+        elif event["type"] == "customer.subscription.updated":
+            sub = event["data"]["object"]
+            customer_id = sub.get("customer")
+            items = sub.get("items", {}).get("data", [])
+            if customer_id and items:
+                price_id = items[0].get("price", {}).get("id", "")
+                new_tier = price_map.get(price_id)
+                if new_tier:
+                    await db.users.update_one(
+                        {"stripe_customer_id": customer_id},
+                        {"$set": {"tier": new_tier}}
+                    )
+                    logger.info(f"Subscription updated: {customer_id} → {new_tier}")
+                    await _record_payment_transaction(
+                        event, "subscription_updated",
+                        stripe_customer_id=customer_id, tier=new_tier,
+                    )
+
+        elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
+            customer_id = event["data"]["object"].get("customer")
+            if customer_id:
                 await db.users.update_one(
                     {"stripe_customer_id": customer_id},
-                    {"$set": {"tier": new_tier}}
+                    {"$set": {"tier": "free"}}
                 )
-                logger.info(f"Subscription updated: {customer_id} → {new_tier}")
-
-    elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
-        customer_id = event["data"]["object"].get("customer")
-        if customer_id:
-            await db.users.update_one(
-                {"stripe_customer_id": customer_id},
-                {"$set": {"tier": "free"}}
-            )
-            logger.info(f"Subscription ended: {customer_id} downgraded to free")
+                logger.info(f"Subscription ended: {customer_id} downgraded to free")
+                await _record_payment_transaction(
+                    event, "subscription_ended",
+                    stripe_customer_id=customer_id, tier="free",
+                )
+    except Exception:
+        await _unclaim_stripe_event(event["id"])
+        logger.exception(f"Stripe webhook processing failed for {event['id']} — claim released for retry")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
     return {"status": "ok"}
 
@@ -3922,15 +4009,25 @@ async def stripe_identity_webhook(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
-    if event["type"] == "identity.verification_session.verified":
-        session_obj = event["data"]["object"]
-        user_id = session_obj.get("metadata", {}).get("user_id")
-        if user_id:
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"identity_verified": True, "identity_verified_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            logger.info(f"Identity verified for user {user_id}")
+    # Identity events can also be redelivered — dedup against the same claim store.
+    if not await _claim_stripe_event(event):
+        logger.info(f"Stripe identity event {event['id']} already processed — skipping (duplicate)")
+        return {"status": "ok", "duplicate": True}
+
+    try:
+        if event["type"] == "identity.verification_session.verified":
+            session_obj = event["data"]["object"]
+            user_id = session_obj.get("metadata", {}).get("user_id")
+            if user_id:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"identity_verified": True, "identity_verified_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                logger.info(f"Identity verified for user {user_id}")
+    except Exception:
+        await _unclaim_stripe_event(event["id"])
+        logger.exception(f"Identity webhook processing failed for {event['id']} — claim released for retry")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
     return {"status": "ok"}
 
