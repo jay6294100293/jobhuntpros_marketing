@@ -24,6 +24,9 @@ import { BrandProfiles } from './components/BrandProfiles';
 import { TutorialStudio } from './components/TutorialStudio';
 import { AdminRoute } from './components/Admin';
 import { MarketingLayout } from './components/MarketingLayout';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { Terms } from './components/Terms';
+import { Settings } from './components/Settings';
 import './App.css';
 
 // Wraps all authenticated routes — shows landing page or app depending on auth.
@@ -63,6 +66,7 @@ const ProtectedApp = () => {
         <Route path="/brands" element={<BrandProfiles />} />
         <Route path="/tutorial" element={<TutorialStudio />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   );
@@ -80,6 +84,8 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route path="/admin/*" element={<AdminRoute />} />
             <Route path="/*" element={<ProtectedApp />} />
           </Routes>

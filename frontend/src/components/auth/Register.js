@@ -185,9 +185,9 @@ export const Register = () => {
 
         <p className="text-center text-xs text-zinc-600 mt-4">
           By creating an account you agree to our{' '}
-          <a href="https://launchbusinessai.com/terms" className="underline hover:text-zinc-400" target="_blank" rel="noreferrer">
-            Terms of Service
-          </a>
+          <Link to="/terms" className="underline hover:text-zinc-400">Terms of Service</Link>
+          {' '}and{' '}
+          <Link to="/privacy" className="underline hover:text-zinc-400">Privacy Policy</Link>
         </p>
       </div>
     </div>

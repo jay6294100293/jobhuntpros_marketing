@@ -655,6 +655,11 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class DeleteAccountRequest(BaseModel):
+    # Password accounts submit `password`; OAuth-only accounts type `confirm_email`.
+    password: Optional[str] = None
+    confirm_email: Optional[str] = None
+
 class ForgotPasswordRequest(BaseModel):
     email: str
 
@@ -3303,6 +3308,8 @@ async def me(user = Depends(get_current_user)):
     }
     safe["identity_verified"] = bool(user.get("identity_verified"))
     safe["has_agreed"] = bool(agreement)
+    # Lets the Settings page show the right delete-account confirmation (password vs email).
+    safe["has_password"] = bool(user.get("hashed_password"))
 
     # Legal credits info
     from legal_router import LEGAL_TIER_CONFIG, _year_month  # late import
@@ -3324,6 +3331,86 @@ async def me(user = Depends(get_current_user)):
         "can_generate": tier != "free",
     }
     return safe
+
+
+# User-owned collections erased on account deletion (all tightly user_id-filtered).
+# legal_chat is handled separately (keyed by profile_id, not user_id).
+# DECISION: payment_transactions is intentionally OMITTED — financial records are
+# retained under record-keeping obligations, keyed to the now-deleted user id.
+_ERASURE_COLLECTIONS = (
+    "usage", "legal_documents", "legal_profiles", "legal_credits_usage",
+    "logos", "beta_agreements", "brand_profiles", "talking_head_consents",
+    "talking_head_logs", "projects", "posters", "scripts", "videos",
+)
+
+
+@auth_router.delete("/account")
+async def delete_account(req: DeleteAccountRequest, user = Depends(get_current_user)):
+    """Permanently delete the current user's account and all associated personal data
+    (GDPR Art. 17 / CCPA right to erasure).
+
+    Re-auth is required to prevent accidental or token-replay deletion. Financial
+    records in `payment_transactions` are RETAINED under legal record-keeping
+    obligations. See docs/decisions/2026-06-22-account-deletion-and-legal-pages.md
+    """
+    # ── Re-authenticate ──────────────────────────────────────────────────────────
+    if user.get("hashed_password"):
+        if not req.password or not verify_password(req.password, user["hashed_password"]):
+            raise HTTPException(status_code=403, detail="Password is incorrect.")
+    else:
+        # OAuth-only account (no password) — confirm by typing the exact account email.
+        if (req.confirm_email or "").strip().lower() != str(user.get("email", "")).lower():
+            raise HTTPException(
+                status_code=403,
+                detail="Type your account email exactly to confirm deletion.",
+            )
+
+    user_id = user["id"]
+
+    # ── Best-effort: cancel active Stripe subscriptions so a deleted account is not
+    #    billed forever. Cancellation only — cannot increase charges. Never blocks. ──
+    if stripe_lib and STRIPE_SECRET_KEY and user.get("stripe_customer_id"):
+        try:
+            subs = stripe_lib.Subscription.list(customer=user["stripe_customer_id"], status="active")
+            for sub in subs.get("data", []):
+                stripe_lib.Subscription.delete(sub["id"])
+            logger.info(f"Cancelled Stripe subscriptions for deleted user {user_id}")
+        except Exception as e:
+            logger.error(f"Stripe cancellation failed during account deletion ({user_id}): {e}")
+
+    # ── Erase user-owned data. Best-effort per collection so one failure doesn't
+    #    abort the rest; the users record is deleted LAST so a retry still works. ──
+    deleted: dict = {}
+
+    # legal_chat is keyed by profile_id — resolve the user's profiles first.
+    try:
+        profiles = await db.legal_profiles.find({"user_id": user_id}, {"id": 1, "_id": 0}).to_list(None)
+        profile_ids = [p["id"] for p in profiles if p.get("id")]
+        if profile_ids:
+            res = await db.legal_chat.delete_many({"profile_id": {"$in": profile_ids}})
+            deleted["legal_chat"] = res.deleted_count
+    except Exception as e:
+        logger.error(f"Erasure failed for legal_chat ({user_id}): {e}")
+
+    for coll in _ERASURE_COLLECTIONS:
+        try:
+            res = await db[coll].delete_many({"user_id": user_id})
+            deleted[coll] = res.deleted_count
+        except Exception as e:
+            logger.error(f"Erasure failed for {coll} ({user_id}): {e}")
+
+    # Waitlist row is keyed by email, if present.
+    try:
+        await db.beta_users.delete_many({"email": str(user.get("email", "")).lower()})
+    except Exception:
+        pass
+
+    # ── Finally, the account record itself. ──────────────────────────────────────
+    await db.users.delete_one({"id": user_id})
+    deleted["users"] = 1
+    logger.info(f"Account erased: user {user_id} — {deleted}")
+
+    return {"status": "deleted", "deleted": deleted}
 
 
 @auth_router.post("/accept-agreement")

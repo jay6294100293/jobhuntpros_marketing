@@ -166,12 +166,16 @@ export const Layout = ({ children }) => {
                       <><Tag className="w-3 h-3" /> Free</>
                     )}
                   </Link>
-                  <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700">
+                  <Link
+                    to="/settings"
+                    title="Account settings"
+                    className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 rounded-lg border border-zinc-700 hover:border-zinc-600 transition-colors"
+                  >
                     <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
                       {(user.name || user.email)[0].toUpperCase()}
                     </div>
                     <span className="text-sm text-zinc-300 max-w-[120px] truncate">{user.name || user.email}</span>
-                  </div>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     title="Sign out"
@@ -205,6 +209,10 @@ export const Layout = ({ children }) => {
 
       <footer className="relative z-10 border-t border-zinc-800/50 py-3 text-center">
         <p className="text-xs text-zinc-600">Beta Version — Not for commercial use · NovaJay Tech (FM1032559)</p>
+        <div className="flex items-center justify-center gap-4 mt-1.5">
+          <Link to="/privacy" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Privacy</Link>
+          <Link to="/terms" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Terms</Link>
+        </div>
       </footer>
     </div>
   );
