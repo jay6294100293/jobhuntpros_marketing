@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, Palette, Scale, Megaphone, ArrowRight } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Zap, Loader2, CheckCircle2, ChevronDown, ChevronUp, Briefcase, Palette, Scale, Megaphone, ArrowRight, FileText } from 'lucide-react';
 import axios from 'axios';
+import posthog from 'posthog-js';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useBrand } from '../context/BrandContext';
@@ -10,7 +11,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 // Steps with cumulative % and estimated duration in seconds
-const STEPS = [
+const STEPS_URL = [
   { label: 'Analyzing website',       pct: 8,   duration: 4  },
   { label: 'Extracting brand colors', pct: 14,  duration: 3  },
   { label: 'Writing ad script',       pct: 30,  duration: 12 },
@@ -20,6 +21,16 @@ const STEPS = [
   { label: 'Creating social posters', pct: 96,  duration: 5  },
   { label: 'Packaging results',       pct: 100, duration: 2  },
 ];
+const STEPS_DESC = [
+  { label: 'Processing product brief', pct: 8,   duration: 2  },
+  { label: 'Preparing brand assets',   pct: 14,  duration: 2  },
+  { label: 'Writing ad script',        pct: 30,  duration: 12 },
+  { label: 'Writing tutorial script',  pct: 46,  duration: 12 },
+  { label: 'Rendering ad video',       pct: 68,  duration: 20 },
+  { label: 'Rendering tutorial video', pct: 88,  duration: 18 },
+  { label: 'Creating social posters',  pct: 96,  duration: 5  },
+  { label: 'Packaging results',        pct: 100, duration: 2  },
+];
 
 export const Dashboard = () => {
   const [url, setUrl] = useState('');
@@ -27,6 +38,9 @@ export const Dashboard = () => {
   const [targetAudience, setTargetAudience] = useState('');
   const [creativeDirection, setCreativeDirection] = useState('');
   const [showCreative, setShowCreative] = useState(false);
+  const [inputMode, setInputMode] = useState('url'); // 'url' | 'description'
+  const [userDescription, setUserDescription] = useState('');
+  const [userFeatures, setUserFeatures] = useState(['', '', '']);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [usedCreative, setUsedCreative] = useState(false);
@@ -53,7 +67,8 @@ export const Dashboard = () => {
 
   const hasFreeTrial = user && !user.free_pro_trial_used;
 
-  const TOTAL_EST = STEPS.reduce((s, x) => s + x.duration, 0); // ~76s
+  const activeSteps = inputMode === 'url' ? STEPS_URL : STEPS_DESC;
+  const TOTAL_EST = activeSteps.reduce((s, x) => s + x.duration, 0); // ~76s
 
   const startProgress = () => {
     setProgress(0);
@@ -68,13 +83,14 @@ export const Dashboard = () => {
 
     // Advance through steps
     let idx = 0;
+    const steps = inputMode === 'url' ? STEPS_URL : STEPS_DESC;
     const advance = () => {
-      if (idx >= STEPS.length) return;
+      if (idx >= steps.length) return;
       setStepIdx(idx);
-      setProgress(STEPS[idx].pct);
-      const next = STEPS[idx + 1];
+      setProgress(steps[idx].pct);
+      const next = steps[idx + 1];
       if (next) {
-        stepTimerRef.current = setTimeout(advance, STEPS[idx].duration * 1000);
+        stepTimerRef.current = setTimeout(advance, steps[idx].duration * 1000);
       }
       idx++;
     };
@@ -87,37 +103,52 @@ export const Dashboard = () => {
   };
 
   const handleMagicButton = async () => {
-    if (!url || !productName || !targetAudience) {
+    if (!productName || !targetAudience) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    // Client-side URL sanity check before hitting the server
-    try {
-      const parsed = new URL(url.trim());
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        toast.error('Please enter a valid website URL (starting with http:// or https://)');
+    if (inputMode === 'url') {
+      // Client-side URL sanity check
+      try {
+        const parsed = new URL(url.trim());
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          toast.error('Please enter a valid website URL (starting with http:// or https://)');
+          return;
+        }
+      } catch {
+        toast.error('Please enter a valid website URL');
         return;
       }
-    } catch {
-      toast.error('Please enter a valid website URL');
-      return;
+    } else {
+      if (!userDescription.trim()) {
+        toast.error('Please describe your product');
+        return;
+      }
     }
 
     const hasCreative = canUseCreative && creativeDirection.trim().length > 0;
     setUsedCreative(hasCreative);
     setLoading(true);
     startProgress();
+    posthog.capture('magic_button_started', { has_brand: !!activeBrand, has_creative: !!creativeDirection.trim(), mode: inputMode });
+
+    const filledFeatures = userFeatures.map(f => f.trim()).filter(Boolean);
+
     try {
       const response = await axios.post(`${API}/magic-button`, {
-        url,
+        ...(inputMode === 'url' ? { url } : {
+          user_description: userDescription.trim(),
+          ...(filledFeatures.length ? { user_features: filledFeatures } : {}),
+        }),
         product_name: productName,
         target_audience: targetAudience,
         ...(hasCreative ? { creative_direction: creativeDirection.trim() } : {}),
         ...(activeBrand ? { profile_id: activeBrand.id } : {}),
-      });
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('jhp_token')}` } });
 
       setProgress(100);
+      posthog.capture('magic_button_completed', { video_count: response.data?.videos?.length ?? 0 });
       setResults(response.data);
       toast.success('Launch Pack generated successfully!');
     } catch (error) {
@@ -228,7 +259,12 @@ export const Dashboard = () => {
             <span className="text-gradient">Create Your Launch Pack</span>
           </h1>
           <p className="text-base text-zinc-400">
-            Paste your URL — videos, scripts, and posters in 90 seconds.
+            Paste your product URL — or describe your product if you don't have a site yet.
+            We write the scripts, render 4 videos in every format, and create social posters. All in ~90 seconds.
+          </p>
+          <p className="text-xs text-zinc-600 mt-2">
+            Also need contracts, privacy policies, or NDAs?{' '}
+            <Link to="/legal" className="text-indigo-400 hover:text-indigo-300 transition-colors">Try the Legal tool →</Link>
           </p>
         </div>
 
@@ -269,20 +305,85 @@ export const Dashboard = () => {
               )
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
-                <LinkIcon className="inline w-4 h-4 mr-2" />
+            {/* ── Input mode toggle ── */}
+            <div className="flex items-center gap-1 p-1 bg-zinc-900/60 border border-zinc-800 rounded-lg w-fit">
+              <button
+                type="button"
+                onClick={() => setInputMode('url')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${inputMode === 'url' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
                 Website URL
-              </label>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com"
-                data-testid="url-input"
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
-              />
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('description')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${inputMode === 'description' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                No website yet
+              </button>
             </div>
+
+            {/* URL input */}
+            {inputMode === 'url' && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  <LinkIcon className="inline w-4 h-4 mr-2" />
+                  Website URL
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  data-testid="url-input"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
+                />
+              </div>
+            )}
+
+            {/* Description mode inputs */}
+            {inputMode === 'description' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">
+                    <FileText className="inline w-4 h-4 mr-2" />
+                    What does your product do?
+                    <span className="text-zinc-500 font-normal ml-2">1–2 sentences</span>
+                  </label>
+                  <textarea
+                    value={userDescription}
+                    onChange={e => setUserDescription(e.target.value.slice(0, 500))}
+                    placeholder="e.g. LaunchBusiness AI turns any product URL into a full marketing pack — 4 videos, 3 scripts, and social posters — in 90 seconds."
+                    rows={3}
+                    data-testid="user-description-input"
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600 resize-none"
+                  />
+                  <div className="text-right text-xs text-zinc-600 mt-1">
+                    <span className={userDescription.length > 450 ? 'text-amber-500' : ''}>{userDescription.length}/500</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">
+                    Key features
+                    <span className="text-zinc-500 font-normal ml-2">optional · up to 3</span>
+                  </label>
+                  <div className="space-y-2">
+                    {userFeatures.map((f, i) => (
+                      <input
+                        key={i}
+                        type="text"
+                        value={f}
+                        onChange={e => setUserFeatures(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
+                        placeholder={['Generates 4 videos in every format', 'No design skills needed', 'Results in under 90 seconds'][i]}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-2.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-zinc-600"
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -426,7 +527,7 @@ export const Dashboard = () => {
                 {/* Progress bar */}
                 <div>
                   <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
-                    <span className="text-indigo-400 font-medium">{STEPS[stepIdx]?.label}…</span>
+                    <span className="text-indigo-400 font-medium">{activeSteps[stepIdx]?.label}…</span>
                     <span>{progress}%</span>
                   </div>
                   <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">

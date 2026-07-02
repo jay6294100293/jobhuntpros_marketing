@@ -14,7 +14,7 @@ LaunchBusiness AI is a two-pillar platform for founders:
 **Live at:** https://launchbusinessai.com  
 **Company:** NovaJay Tech (novajaytech.com)  
 **Repo:** https://github.com/jay6294100293/jobhuntpros_marketing  
-**Server:** Contabo VPS · root@YOUR_SERVER_IP · /root/swiftpack  
+**Server:** Contabo VPS · root@YOUR_SERVER_IP · /opt/swiftpack  
 
 ---
 
@@ -38,10 +38,13 @@ LaunchBusiness AI is a two-pillar platform for founders:
 | Format-specific scripts | ✅ Live | Each format gets word-count-targeted Gemini prompt |
 | Audio-driven duration | ✅ Live | Video length matches narration via ffprobe |
 | URL safety — hostname | ✅ Live | Blocks adult domains + malicious hostnames + bad TLDs |
+| URL safety — DNS SSRF | ✅ Live | Resolves hostname via socket before fetch; blocks RFC1918/loopback/link-local IPs |
 | URL safety — content | ✅ Live | Post-scrape scan for adult/explicit signals in title+desc |
 | URL safety — Safe Browsing | ✅ Code done | Google Safe Browsing API v4 — needs GOOGLE_SAFE_BROWSING_API_KEY |
+| Rate limiting | ✅ Live | Per-real-IP (X-Real-IP header); login/register 5/min, forgot-password 3/min |
+| Privacy Policy + Terms | ✅ Live | /privacy + /terms routed without auth; linked from Landing footer + auth forms |
 | SadTalker talking head | ✅ Code done | Needs Modal deploy + Stripe Identity activation |
-| Open registration | ✅ Live | Auto-login, password + confirm fields |
+| Registration | ✅ Live | Register.js routed at /register; terms/privacy consent line on all auth forms |
 
 ### ✅ Legal Documents Feature (June 2026 — new)
 
@@ -78,7 +81,8 @@ Connects the previously-siloed Logo / Marketing / Legal tools via one shared "ac
 ## Tech Stack
 
 ```
-Backend:    FastAPI (Python 3.11) — server.py (~3100 lines) + legal_router.py + jarvis_router.py + brand_router.py
+Backend:    FastAPI (Python 3.11) — server.py (4,496 lines) + legal_router.py + admin_router.py +
+            brand_router.py + jarvis_router.py + modal_video.py + modal_sadtalker.py
 Frontend:   React 19 + Tailwind CSS 3.4 + Shadcn/UI + Framer Motion + React Router DOM 7.5.1
 Database:   MongoDB (Motor async driver)
 AI/LLM:     Google Gemini 2.5 Flash (google-genai SDK)
@@ -91,7 +95,7 @@ GPU:        Modal.com — Wan 2.2 TI2V-5B (A10G, replaces LTX-Video), SadTalker 
 Ports:      Backend 8001, Frontend 3000
 Proxy:      Nginx (SSL + reverse proxy, Let's Encrypt)
 Deploy:     Docker Compose (mongo + backend + frontend + nginx)
-Server:     Contabo VPS as root, /root/swiftpack
+Server:     Contabo VPS as root, /opt/swiftpack
 SSH key:    novajaytechserver_testing-key.pem
 ```
 
@@ -249,7 +253,7 @@ ENVIRONMENT=production
 | Free | $0 | 3 lifetime | 0 (catalog view only) | 0 |
 | Starter | $19/mo | 15 | 20 | 1 |
 | Pro | $49/mo | 50 | 60 | 3 |
-| Agency | $149/mo | 200 | 150 | Unlimited |
+| Agency | $149/mo | 200 | 150 | 10 |
 
 **Topup packages:** 15cr/$5 · 35cr/$10 (best value) · 80cr/$20
 
@@ -264,7 +268,7 @@ ENVIRONMENT=production
 ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@YOUR_SERVER_IP
 
 # Rebuild backend (after legal_router.py or server.py changes)
-cd /root/swiftpack && git pull
+cd /opt/swiftpack && git pull
 docker compose build backend && docker compose up -d backend
 docker restart swiftpack-nginx-1    # ← always restart nginx after backend
 
@@ -308,6 +312,10 @@ tail -f /root/logs/swiftpack-deploy.log
 - Playwright/Chromium too heavy for Contabo VPS (1GB RAM limit) — do not install
 - Legal documents require lawyer review — all docs include prominent disclaimer
 - DuckDuckGo search in legal_router may be rate-limited under heavy load (add backoff if needed)
+- Rate limiter is in-process (resets on restart, not shared across workers). Sufficient for single
+  uvicorn worker. Upgrade to Redis-backed limiter if multiple workers are ever run.
+- _is_safe_url now does a synchronous DNS lookup per scrape request (~10–50ms). Acceptable at
+  current scale; adds ~50ms to Magic Button on slow DNS. Monitor if latency becomes noticeable.
 
 ---
 

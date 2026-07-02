@@ -1,310 +1,293 @@
-# SWIFTPACK AI (formerly Content Studio) — CLAUDE CODE MASTER PROMPT
-# Read this entire file before touching any code. No exceptions.
+# CLAUDE.md — LaunchBusiness AI
+# Auto-loaded by Claude Code every session. These rules are mandatory.
+# Last generated: 2026-06-21
+# Previous version: SWIFTPACK AI master prompt (undated; superseded)
+#
+# CHANGELOG (upgrade from previous CLAUDE.md):
+# - KEPT:     ~14 core rules (Magic Button pipeline, scraping limits, executor rule,
+#             VPS RAM limit, GTX 1080 Ti reservation, talking-head gate, GitNexus protocol…)
+# - UPGRADED: backend layout (now 7 modules, server.py is 4,496 lines), health-check
+#             grep, pricing/limits tables reconciled with docs/PROJECT_SUMMARY.md
+# - REMOVED:  domain "swiftpackai.tech" (prod is launchbusinessai.com); project path
+#             "E:\jobhuntpro_marketing" (actual D:\NOVAJAY_TECH\jobhuntpro_marketing);
+#             "Tutorial Studio to be built" (it is built); "server.py ~3100 lines"
+# - ADDED:    Section 2 environment tiers + staging-first default; admin_router rules;
+#             Sentry/PostHog rule; jhp_token rule; legal-disclaimer compliance rule;
+#             auto-deploy-on-push risk guardrail; near-zero-tests reality
+#
+# The long-form product knowledge from the old master prompt now lives in
+# docs/PROJECT_SUMMARY.md, docs/ARCHITECTURE.md, and docs/RUNBOOK.md. This file is
+# governance: what is fragile, what must never break, and how to work safely.
 
 ---
 
-## STEP 1 — ACTIVATE TOOLS (DO THIS FIRST, EVERY SESSION)
+## 0 — Project identity
 
-### 1a. GitNexus Knowledge Graph
-- Check if `gitnexus` MCP tools are available
-- If YES → use `search_code` before editing `server.py` or any component
-- If NO → run: `npx gitnexus analyze E:\jobhuntpro_marketing` then `npx gitnexus setup`
+LaunchBusiness AI is a two-pillar SaaS for founders: **(1)** a Marketing Launch Pack —
+paste a product URL and get a logo + videos + scripts + posters in ~90 seconds (the
+"Magic Button"); **(2)** an AI Legal Document generator — Gemini intake chat → 28
+jurisdiction-aware document types grounded in live 2026 law context. Backend is FastAPI
+(`backend/server.py` + routers), frontend is a React 19 SPA, plus a Chrome MV3 extension
+(Tutorial Studio). Live at **https://launchbusinessai.com**. Company: NovaJay Tech.
+Repo: `jobhuntpro_marketing` (the repo name is legacy — the product is LaunchBusiness AI).
 
-### 1b. Agent Persona
-Activate from `~/.claude/agents/` based on task:
-- FastAPI routes / Python backend → `fastapi-developer`
-- React components / UI → `react-developer`
-- Video generation / MoviePy → `python-developer`
-- Landing page / copy / pricing → `frontend-developer` + load marketingskills (see 1d)
-- Pre-deploy → `security-auditor` then `qa-engineer`
+**Status: pre-revenue, no live paying users yet.** Optimize for shipping safely, not for
+five-nines uptime — but never lose user data and never break the two things below.
 
-### 1c. ccg-workflow
+**Must never break:** (a) the Magic Button pipeline (`POST /api/magic-button` →
+scrape → scripts → videos → posters); (b) auth + the legal document generation flow.
+These are the product.
+
+---
+
+## 1 — Mandatory planning protocol
+
+Before writing any code, output a plan block:
+
 ```
-/ccg:spec-research [task]
-/ccg:spec-plan
-/ccg:spec-impl
-/ccg:spec-review
-
-/ccg:frontend [task]   ← React UI work → routes to Gemini (paid plan)
-/ccg:backend [task]    ← FastAPI work → routes to Codex
+PLAN:
+  touches: [list files/modules affected]
+  data_change: <yes/no — describe collection + field if yes>
+  failure_modes: [3 specific ways this could go wrong in THIS project]
+  rollback: <exact steps to undo this change>
 ```
 
-### 1d. Marketing Skills (MANDATORY for any landing page / copy / pricing work)
+For changes touching `backend/server.py` auth/Stripe/scrape sections, `legal_router.py`
+generation, `admin_router.py`, the Magic Button pipeline, or any MongoDB write path,
+write the plan to `docs/decisions/YYYY-MM-DD-<topic>.md` before coding.
+
+Per the GitNexus rules in `AGENTS.md`: run `gitnexus_impact({target, direction:"upstream"})`
+before editing any symbol and report the blast radius; run `gitnexus_detect_changes()`
+before committing. Warn on HIGH/CRITICAL risk before proceeding.
+
+---
+
+## 2 — Environment tiers (ENFORCE STRICTLY)
+
+**Default deploy target is always `staging`.** NEVER deploy to production unless I
+explicitly say "deploy to production."
+
+```
+Local:      http://localhost:3000 (frontend) / http://localhost:8001 (backend)
+            docker-compose.yml — for development only
+Staging:    infra/docker-compose.staging.yml — for all testing (see docs/RUNBOOK.md)
+            NOTE: a staging tier was generated 2026-06-21; stand it up before relying on it
+Production: https://launchbusinessai.com  — explicit permission required
+            docker-compose.prod.yml on the Contabo VPS at /opt/swiftpack
+```
+
+**CRITICAL operational risk:** `.github/workflows/deploy.yml` currently auto-deploys
+every push to `main` straight to production via a webhook (`:9000/deploy/swiftpack`),
+and a 5-minute cron on the VPS also pulls `main`. **Treat any merge to `main` as a
+production deploy.** Do small, reviewed changes; verify locally/on staging first. Do not
+push to `main` to "see if it works."
+
+Environment detection: backend reads `ENVIRONMENT` env var; secrets are injected via
+`env_file` in docker-compose (prod: `/root/secrets/swiftpack.env`). `server.py` also
+`load_dotenv`s, in order, `/root/secrets/swiftpack.env` → `/home/ubuntu/secrets/swiftpack.env`
+(legacy) → `E:/secrets/swiftpack.env` (Windows) → `backend/.env` for local dev.
+
+---
+
+## 3 — Security rules (project-specific)
+
+- **Secrets:** never hardcode. Read from env only. Canonical template is
+  `backend/.env.example`. Required: `MONGODB_URL`, `DB_NAME`, `JWT_SECRET` (≥32 chars),
+  `ADMIN_SECRET`, `GEMINI_API_KEY`. Never commit `.env`, `*.pem`, or anything under
+  `/secrets/` (already in `.gitignore`).
+- **Auth:** JWT (jose) + bcrypt. The frontend stores the token in localStorage as
+  **`jhp_token`** — NOT `token`. Using the wrong key causes silent 401s (this has bitten
+  `BrandProfiles.js`, `LegalDocs.js`, `legal/*.js` before). Any new authed fetch must read
+  `jhp_token`.
+- **Admin:** `/api/admin/*` (`admin_router.py`) requires a logged-in user with
+  `is_admin=True`. `ADMIN_EMAILS` auto-grants admin on login (password or Google). The
+  legacy `X-Admin-Secret` header (`ADMIN_SECRET`) only gates `POST /api/admin/bootstrap`
+  — used ONCE. JARVIS (`/api/jarvis/pulse`) uses the `X-Admin-Key` header. Never weaken
+  these checks.
+- **URL safety:** the scrape path enforces hostname blocklist + post-scrape content scan
+  + (when keyed) Google Safe Browsing. Never bypass these to scrape faster.
+- **Scraping:** only process URLs the user pasted. Never crawl, never persist scraped
+  data — process and return. `httpx` uses `verify=False` for SSL compat; do not add
+  arbitrary outbound requests to user-controlled hosts elsewhere.
+- **PII / financial:** never log full Stripe webhook payloads, JWTs, or
+  `payment_transactions` / `users` documents. Sentry + PostHog are wired — scrub
+  identifiers; don't ship raw request bodies to them.
+- **Legal output:** every generated legal document MUST keep its lawyer-review disclaimer
+  (date + jurisdiction + "not legal advice"). Never strip it — it is the compliance shield.
+
+---
+
+## 4 — Database rules
+
+Engine: **MongoDB 7** via Motor (async). DB name: `launchbusinessai_db` everywhere
+(prod compose, local dev compose, and `.env`).
+
+Critical collections (catastrophic to lose): `users`, `payment_transactions`,
+`legal_documents`, `legal_profiles`, `talking_head_consents`. Also: `usage`,
+`legal_credits_usage`, `legal_chat`, `logos`, `beta_agreements`, `beta_users`.
+
+- MongoDB writes are intentionally resilient — content still generates if Mongo is down,
+  the write is silently skipped. Do not "fix" this into a hard failure without a plan.
+- Always filter user-owned queries by `user_id`. Never return another user's
+  `legal_documents` / `legal_profiles`.
+- **STOP and ask before** any `drop`, `delete_many`, `update_many` without a tight filter,
+  or any collection rename. Confirm a backup exists first (see docs/RUNBOOK.md).
+- No migration framework exists. Schema changes are code-level; for any change to a
+  critical collection's shape, write a decision note (Section 1) and apply on staging
+  first.
+- **Backups are NOT yet confirmed to exist.** Until an automated `mongodump` is in place
+  (see RUNBOOK §7), treat every destructive op as unrecoverable and refuse to run it
+  without explicit confirmation.
+
+---
+
+## 5 — Testing gates
+
+Reality check: **automated test coverage is thin.** `tests/test_syntax.py` is the only
+committed unit test (a dependency-free syntax gate that CI runs via `pytest tests/ -q`).
+Root has `backend_test.py`, `test_e2e.js`, `test_detail.js` (Playwright) as ad-hoc
+harnesses. Add real unit tests for any critical path you touch — don't rely on the syntax
+gate alone.
+
+Commands:
 ```bash
-npx skillkit install coreyhaines31/marketingskills --skill page-cro copywriting email-sequence seo-audit
-```
-Then reference skills automatically when writing landing page copy, email sequences, or pricing pages.
-
----
-
-## STEP 2 — READ THESE FILES FIRST
-
-1. `docs/PROJECT_SUMMARY.md` ← current state, tech stack, deploy commands
-2. `docs/PRODUCT_STRATEGY.md` ← business model, pricing, roadmap (READ THIS)
-3. `docs/VIDEO_FEATURES.md` ← video generation spec (read before any video work)
-4. `docs/SETUP_INSTRUCTIONS.md` ← deployment guide
-5. `docs/BRAND_PROFILE_FEATURE.md` ← Brand Profile feature — all 15 items DONE
-6. `docs/WAN_VIDEO_UPGRADE.md` ← Wan 2.2 TI2V-5B is implemented in `backend/modal_video.py` (model `Wan-AI/Wan2.2-TI2V-5B`, A10G GPU, app name `launchbusiness-wan-video`) — read this doc only if touching `modal_video.py`, or to verify `modal deploy` has been run and `MODAL_APP_NAME` is set in prod secrets
-7. `docs/TUTORIAL_STUDIO.md` ← Tutorial Studio is implemented — `extension/` has manifest.json/background.js/popup.html/popup.js/icons, `POST /api/tutorial/process` exists in server.py, and `TutorialStudio.js` is built. Read this doc for spec/UX details or to verify Chrome Web Store submission status
-
----
-
-## STEP 3 — VERIFIED ARCHITECTURE
-
-```
-Backend     → FastAPI 0.110.1 (Python 3.11) — server.py is the entire backend
-Frontend    → React 19 + Tailwind CSS 3.4 + Shadcn/UI + React Router DOM 7.5.1
-Database    → MongoDB (Motor async driver) — resilient, works without it
-AI / LLM    → Google Gemini 2.5 Flash (google-genai SDK — NOT google-generativeai)
-TTS         → Edge TTS (Microsoft Neural, primary, free, no key) → gTTS fallback if Edge fails
-Video       → FFmpeg + Pillow (CPU, VPS) + Modal A10G GPU (Wan 2.2 TI2V-5B) for branded AI clips
-Scraping    → BeautifulSoup4 + httpx (verify=False for SSL compat)
-Auth        → JWT (jose) + bcrypt + beta agreement modal
-Payments    → Stripe — subscriptions, webhooks, usage-limit enforcement, coupons all wired; verify live keys/price IDs are set in prod secrets
-Ports       → Backend: 8001, Frontend: 3000
-Proxy       → Nginx (SSL + reverse proxy, Let's Encrypt cert)
-Deployment  → Docker Compose (4 containers: mongo, backend, frontend, nginx)
-Domain      → swiftpackai.tech
-Server      → Contabo VPS root@YOUR_SERVER_IP, repo at /root/swiftpack
-SSH key     → novajaytechserver_testing-key.pem (in ~/Downloads)
-Company     → NovaJay Tech (novajaytech.com)
+# Backend syntax gate (always before deploy)
+python -c "import ast; ast.parse(open('backend/server.py', encoding='utf-8-sig').read())"
+# Backend smoke (needs a running backend on :8001)
+python backend_test.py
+# Frontend build (must succeed before frontend deploy)
+cd frontend && yarn build
+# E2E (local only — never install Chromium on the VPS)
+node test_e2e.js
 ```
 
----
+Minimum before any deploy:
+- [ ] `ast.parse` passes on changed Python files
+- [ ] Magic Button + health check verified (see Section 10)
+- [ ] If frontend changed: `yarn build` succeeds
+- [ ] New backend feature has at least a happy-path + an auth-failure check
 
-## STEP 4 — THE CORE FEATURE (Magic Button)
-
-The entire product revolves around this pipeline — never break it:
-```
-User pastes URL
-    ↓
-POST /api/scrape → BeautifulSoup extracts brand colors, headlines, features
-    ↓
-POST /api/generate-script → Gemini 2.5 Flash → script (PAS / Step-by-Step / Before-After)
-    ↓
-POST /api/create-complete-video → MoviePy pipeline:
-    - Google TTS Neural2 voiceover
-    - UGC-style animated captions (lower third, fade in/out)
-    - Zoom/pan effects (100% → 110%)
-    - Progress bar (branded color)
-    - Multi-format export: 9:16 (TikTok), 16:9 (YouTube), 1:1 (Instagram)
-    ↓
-POST /api/create-poster → Pillow → branded social graphics
-    ↓
-Magic Button response: 2 videos + 2 scripts + 2 posters
-```
+Critical paths that SHOULD get a test when you touch them: Magic Button pipeline, JWT
+auth, Stripe webhook idempotency, legal credit deduction, admin auth gate.
 
 ---
 
-## STEP 5 — ABSOLUTE RULES
-
-### NEVER DO THESE
-- Scrape any URL the user didn't provide — only process URLs users paste themselves
-- Store any scraped data permanently — process and return, no persistent scraping DB
-- Break the Magic Button pipeline — it is the core product feature
-- Use the GTX 1080 Ti for SwiftPack — it runs Mother AI, taking it down kills production
-- Hardcode API keys — always read from environment variables
-- Use synchronous operations for video generation — all heavy ops must be async
-- Block the FastAPI event loop — run heavy work in `asyncio.run_in_executor`
-- Install Playwright/Chromium on VPS — Contabo VPS has 1GB RAM, it will OOM
-- Launch talking head feature without ID verification + DeepFace check (deepfake risk)
-- Reference LTX-Video anywhere — it is REPLACED by Wan 2.2 TI2V-5B (see docs/WAN_VIDEO_UPGRADE.md)
-- Use APP_NAME "swiftpack-ltx-video" — the correct new name is "launchbusiness-wan-video"
-- Run Tutorial Studio recording server-side — the Chrome extension runs on the user's machine, NOT the VPS
-
-### ALWAYS DO THESE
-- Run video generation in executor (not blocking the event loop)
-- Save generated files to `backend/outputs/` directory
-- Clean up temp dirs (shutil.rmtree) after video generation completes
-- Strip shell-unsafe chars from caption text (backticks, $, [], *, #, ', ")
-- Use audio map index = n (number of images) not hardcoded 1 in slideshow FFmpeg
-- Validate all user inputs before passing to Gemini
-- Use `httpx` with verify=False for async HTTP scraping
-- Check syntax (ast.parse) before deploying backend changes
-- Test with Playwright E2E (test_e2e.js) before declaring done
-
----
-
-## STEP 6 — CURRENT PRIORITIES
-
-### Status: Core roadmap is code-complete. Focus is deployment verification + AppSumo launch.
-
-Full strategy in `docs/PRODUCT_STRATEGY.md`.
-
-### ✅ DONE — Quality & Platform Roadmap (Priorities 1–7)
-All of the following are implemented in `backend/server.py` / `backend/modal_video.py` /
-`backend/modal_sadtalker.py`. Do not re-build these — only fix bugs if found:
-
-1. **Edge TTS** — Microsoft Neural voiceover (`en-US-AndrewNeural`) is primary; gTTS is the fallback if Edge fails
-2. **Pillow Slide Design System** — 6 structured templates (Hero, Problem, Solution, Features, How It Works, CTA) with brand colors + logo overlay
-3. **Crossfade Transitions** — FFmpeg `xfade` between slides (0.5s fade)
-4. **Watermark** — burned into slide content area (not a corner overlay), free tier only
-5. **Stripe Subscriptions** — checkout, webhooks, usage-limit enforcement, coupons all wired (Free: 3 lifetime gens / Starter $19 mo: 15 / Pro $49 mo: 50 + talking head / Agency $149 mo: 200 + team + white label)
-6. **Modal Wan 2.2 TI2V-5B** — `backend/modal_video.py` uses model `Wan-AI/Wan2.2-TI2V-5B`, GPU A10G, app name `launchbusiness-wan-video`, takes the Hero Pillow slide PNG as image input. Decision history in `docs/WAN_VIDEO_UPGRADE.md`.
-7. **SadTalker Talking Head** — `backend/modal_sadtalker.py` implemented with Stripe Identity verification gate, DeepFace check, "AI GENERATED" label burn-in, and timestamped consent tracking
-8. **Tutorial Studio** — `extension/` (Chrome Manifest V3: manifest.json, background.js, popup.html, popup.js, icons), `POST /api/tutorial/process` (server.py), and `TutorialStudio.js` all built. Full spec in `docs/TUTORIAL_STUDIO.md`.
-
-### 🔜 ACTUAL NEXT STEPS — Verification & Activation (not new builds)
-
-The code above exists; what needs confirming is production *activation*:
-
-1. **Wan 2.2 deployment** — confirm `modal deploy backend/modal_video.py` has been run and `MODAL_APP_NAME=launchbusiness-wan-video` is set in `/root/secrets/swiftpack.env`
-2. **Stripe live keys** — confirm `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the Starter/Pro/Agency price IDs are set in prod secrets (subscription code is done, just needs keys)
-3. **SadTalker deployment** — confirm `modal deploy backend/modal_sadtalker.py` has run and Stripe Identity is activated
-4. **Tutorial Studio extension** — confirm the Chrome extension has been sideload-tested and/or submitted to the Chrome Web Store
-
-### Priority 8 — AppSumo Lifetime Deal (still pending)
-Only after the verification items above are confirmed (product must be fully live before LTD).
-LTD Tier 1: $79 / 15 gens per month forever
-LTD Tier 2: $149 / 50 gens per month forever
-Cap: 500 codes total. AppSumo takes 30%, you keep 70%.
-
----
-
-## STEP 7 — API ENDPOINTS REFERENCE
-
-```
-GET  /api/                         Health check
-POST /api/scrape                   Scrape URL → brand data
-POST /api/generate-script          Script generation (PAS/Step-by-Step/Before-After)
-POST /api/create-video             Basic video
-POST /api/create-complete-video    Full video with TTS + captions + effects
-POST /api/create-poster            Social graphic PNG
-POST /api/magic-launch-pack        All-in-one: 2 videos + 2 scripts + 2 posters
-POST /api/upload                   Upload asset file
-GET  /api/gallery                  List generated content
-```
-
----
-
-## STEP 8 — FRONTEND COMPONENTS
-
-See `docs/PROJECT_SUMMARY.md` → "Key Files" for the current, maintained list of frontend
-components (Dashboard, BrandProfiles, LogoCreator, LegalDocs + `legal/*`, TutorialStudio,
-Pricing, `auth/*`, `context/AuthContext.js`, etc.). Don't duplicate that list here — update
-`PROJECT_SUMMARY.md` instead so it doesn't drift out of sync again.
-
----
-
-## STEP 9 — ENVIRONMENT VARIABLES
-
-See `docs/PROJECT_SUMMARY.md` → "Environment Variables" for the full, current list (Mongo,
-Gemini, JWT, Stripe, Modal, Pexels, Google Safe Browsing, etc.). Don't duplicate that list here —
-update `PROJECT_SUMMARY.md` instead so it doesn't drift out of sync again.
-
----
-
-## STEP 10 — BEFORE MARKING TASK DONE
+## 6 — Deployment rules
 
 ```bash
-# Test Magic Button end-to-end
-curl -X POST http://localhost:8001/api/magic-launch-pack \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}'
-# Must return 2 videos + 2 scripts + 2 posters
-
-# Test health
-curl http://localhost:8001/api/
-# Must return: {"message": "LaunchBusiness AI API"}
+# Default: deploy to STAGING (see docs/RUNBOOK.md §2)
+# Production (only on explicit "deploy to production"):
+ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@<SERVER_IP>
+cd /opt/swiftpack && git pull
+docker compose -f docker-compose.prod.yml up -d --build backend
+docker restart swiftpack-nginx-1   # ← nginx loses upstream after backend restart; ALWAYS restart it
+# Frontend changes:
+docker compose -f docker-compose.prod.yml up -d --build frontend
 ```
 
----
+Pre-deploy checklist:
+- [ ] Tests/smoke from Section 5 pass on staging
+- [ ] No hardcoded secrets (`git grep -nE 'sk_live|whsec_|AIza|price_[0-9A-Za-z]{14}'`)
+- [ ] DB change reviewed + decision note written, applied on staging first
+- [ ] Rollback plan documented (`git revert` SHA + rebuild)
 
-## STEP 11 — NEXT MAJOR FEATURE: BRAND PROFILE + CONTENT CREATOR REPLACEMENT
+Health check endpoint: `GET /api/` → `{"message": "LaunchBusiness AI API"}`. The deploy
+scripts and `infra/health_check.sh` grep for this exact string — if you change the payload,
+update them (and `tests/test_syntax.py` guards it).
 
-**Full spec in `docs/BRAND_PROFILE_FEATURE.md` — read that file for implementation details.**
-
-### What Jay Wants Built (decided June 2026)
-Replace the human content creator/video editor/lawyer entirely.
-A user inputs a client brand brief ONCE. All three tools (Logo, Video, Legal) read from it.
-Right now the three tools are 100% siloed — they share zero data.
-
-### The Core Problem
-- Logo Creator: generates logos, but logo NEVER appears in videos or posters
-- Magic Button: asks for URL every time, ignores any logo the user already made
-- Legal Docs: AI chat asks all business questions from scratch every session
-
-### The Fix: Brand Profile (MongoDB document, one per client)
-Fields: brand_name, tagline, url, primary_color, secondary_color, active_logo_path,
-        audience, tone, business_type, jurisdiction, revenue_model
-
-All three tools read from this profile. User enters brand info once.
-
-### What Changes Per Tool
-**Logo Creator:** auto-filled from profile. "Set as active logo" button stores logo in profile.
-**Video Pipeline:** logo rendered on Hero slide (top-left, 60px) + CTA slide (bottom, 50px).
-                   3 hook variants generated per run. 4:5 format added. All formats in one job.
-**Legal Docs:** intake chat pre-filled from profile (jurisdiction, business type, revenue model).
-               Reduces 8–10 chat exchanges to 2–3.
-
-### New Endpoint Needed
-`POST /api/full-launch-pack` → reads brand profile → logo + videos + scripts + posters + legal starter → ZIP
-
-### New UX Flow (5-step wizard, replaces URL-paste on Dashboard)
-1. Brand Brief — name, tagline, URL (optional), audience, tone, business type
-2. Brand Identity — logo upload or generate, color picker or auto-extract from URL
-3. Script Selection — all 3 frameworks generated, user picks + edits before render
-4. Format Selection — 9:16 / 16:9 / 1:1 / 4:5, choose hooks (up to 3) → up to 12 videos
-5. Download Pack — all videos + posters + scripts, ZIP export
-
-### Build Status — ALL COMPLETE ✅
-1. Brand Profile CRUD (brand_router.py) + BrandProfiles.js UI              → DONE
-2. Logo → Hero + CTA slide rendering (_paste_logo in server.py)            → DONE
-3. Logo → poster rendering (create_poster reads profile_id)                → DONE
-4. Manual color pickers in BrandProfiles form                               → DONE
-5. 3 hook variants (PAS + Step-by-Step + Before/After in magic button)    → DONE
-6. 4:5 format (TIER_CONFIG + format_map in server.py)                      → DONE
-7. ZIP download (/api/download-pack endpoint)                               → DONE
-8. Legal intake pre-fill (start_chat accepts brand_profile_id)             → DONE
-9. Dashboard profile selector auto-fills fields + passes profile_id        → DONE
-10. LogoCreator profile selector + "Set as active logo" button             → DONE
-
-### Quality Fixes — ALL COMPLETE ✅
-- Poppins-ExtraBold + Inter fonts bundled in backend/assets/fonts/         → DONE
-- Word-chunk TikTok-style captions (3 words/frame) in all FFmpeg builders  → DONE
-- Pexels B-roll (PEXELS_API_KEY env var activates real video backgrounds)  → DONE
-- Poster redesign: Pillow gradient + bundled fonts + logo overlay           → DONE
-
-### To Activate Pexels
-Add to /root/secrets/swiftpack.env: PEXELS_API_KEY=your_key
-Get free key at pexels.com/api (200 req/hr, no credit card)
-
-### Agency Pitch After This Is Built
-Content creators managing multiple clients use Agency ($149/mo, unlimited profiles).
-They replace their entire stack: video editor + copywriter + social manager + lawyer.
-They charge clients $500–$2,000/mo. They pay us $149. That's the pitch.
-
-### Video Ad Social Media Formats (for when creating ads for LaunchBusiness AI itself)
-The best ad for LaunchBusiness AI = screen recording the product running on its own URL.
-Paste launchbusinessai.com → record the 76-second pipeline → show the output. That IS the ad.
-
-Format specs (all from one 9:16 master recording):
-- 9:16 (1080×1920): TikTok, Reels, Shorts, Stories — 21–34 sec ideal
-- 4:5 (1080×1350): Facebook Feed, Instagram Feed — crop top of 9:16
-- 1:1 (1080×1080): LinkedIn, Twitter/X — center crop
-- 16:9 (1920×1080): YouTube pre-roll — extended 60–90 sec cut
-
-Hook formula (first 5 seconds = everything):
-- V1 Pain: "Starting a business shouldn't cost $6,900 in agency fees."
-- V2 Speed: "We just pasted our own URL and got this video in 90 seconds."
-- V3 Unique: "Marketing pack + legal documents. One platform. 90 seconds."
-
-Production tools needed: OBS Studio (screen record) + CapCut Desktop (edit/export) — both free.
+Do not install Playwright/Chromium on the Contabo VPS — keep the server clean; this is a production node, not a dev machine.
 
 ---
 
-## MOTHER AI INTEGRATION
+## 7 — AI agent safety limits
 
-Mother monitors Content Studio via:
-- `GET /api/` — health check (Mother polls this endpoint)
-- Mother alerts if health check fails for 2+ consecutive polls
-- No dedicated Mother endpoint needed — standard health check is sufficient
-- Add `X-Mother-Key` header auth to health endpoint when Mother Phase 10 is built
+STOP and ask before:
+- Any command containing: `rm -rf`, `drop`, `delete_many`/`update_many` (untargeted),
+  `TRUNCATE`, `--force`, `git push --force`
+- Any deploy to production (and remember: pushing to `main` IS a prod deploy here)
+- Any change to auth, admin gating, or Stripe webhook logic
+- Any operation on the critical collections in Section 4
+- Installing a new dependency (verify it exists on PyPI/npm first; pin the version)
+- Editing `nginx/nginx.prod.conf` (it still hardcodes the old `swiftpackai.tech` domain
+  and SSL cert paths — changing it wrong takes the site down)
+
+Maximum autonomous command chain: 3 commands, then check in.
+
+---
+
+## 8 — Institutional knowledge protocol
+
+After every non-obvious decision, write inline:
+```
+# DECISION: why X instead of Y
+# EDGE CASE: breaks if Z — handle with ...
+# KNOWN LIMIT: ...
+```
+Architecture decisions → `docs/decisions/YYYY-MM-DD-<topic>.md`.
+Keep `docs/PROJECT_SUMMARY.md` as the single source of truth for components/env vars —
+update it instead of duplicating lists into other files (it has drifted before).
+
+---
+
+## 9 — Project-specific hard rules
+
+- **The Magic Button pipeline is the core product — never break it.** Order:
+  `scrape_url` → `generate_script` (PAS/Step-by-Step/Before-After, parallel, format-
+  targeted) → `create_complete_video` (×formats, parallel) → `create_poster`. See
+  docs/PROJECT_SUMMARY.md "Magic Button Pipeline".
+- **Never block the FastAPI event loop.** All heavy work (FFmpeg, Pillow, TTS) runs in
+  `asyncio.run_in_executor`. Video generation is async, never synchronous.
+- Save generated files to `backend/outputs/`; clean temp dirs with `shutil.rmtree` after
+  generation completes.
+- Strip shell-unsafe chars from caption text before FFmpeg (backticks, `$`, `[]`, `*`,
+  `#`, quotes).
+- Logo must render on Hero + CTA slides and on posters when a brand profile is active
+  (Brand Profile feature). Don't silently drop the logo.
+- **Talking head (SadTalker) requires** Stripe Identity verification + DeepFace check +
+  "AI GENERATED" label burn-in + timestamped consent in `talking_head_consents`. Never
+  launch this path without all four.
+- **Tutorial Studio recording runs in the user's Chrome extension** (`extension/`), NOT
+  server-side. Do not add server-side screen recording.
+- **GTX 1080 Ti is reserved for Mother AI** — never route LaunchBusiness traffic to it;
+  taking it down kills a separate production system. GPU video uses Modal A10G only
+  (`modal_video.py` app `launchbusiness-wan-video`; `modal_sadtalker.py`).
+- Reference Wan 2.2 TI2V-5B, never LTX-Video (replaced). App name is
+  `launchbusiness-wan-video`, never `swiftpack-ltx-video`.
+- DuckDuckGo legal-context search can be rate-limited under load — add backoff, don't
+  hammer it.
+- The backend is now multi-module: `server.py` (~4,496 lines), plus `legal_router.py`,
+  `jarvis_router.py`, `brand_router.py`, `admin_router.py`, `modal_video.py`,
+  `modal_sadtalker.py`. Use GitNexus to navigate rather than scrolling server.py.
+
+---
+
+## 10 — Definition of done
+
+A task is complete only when:
+- [ ] Code written and working
+- [ ] `ast.parse` passes on changed Python; `yarn build` passes if frontend changed
+- [ ] Smoke test pasted — at minimum:
+  ```bash
+  curl http://localhost:8001/api/          # → {"message":"LaunchBusiness AI API"}
+  curl -X POST http://localhost:8001/api/magic-button \
+    -H "Content-Type: application/json" -d '{"url":"https://example.com"}'
+  ```
+- [ ] No hardcoded secrets (grep from Section 6)
+- [ ] Auth-affected paths explicitly checked (uses `jhp_token`, admin gate intact)
+- [ ] No destructive DB op ran without confirmation + backup
+- [ ] Decision note written for non-obvious choices
+- [ ] `gitnexus_detect_changes()` confirms scope; index re-analyzed after commit
+
+---
+
+> GitNexus code-intelligence rules (impact analysis, safe rename, detect_changes, index
+> freshness) live in `AGENTS.md` under the managed `gitnexus` block — they apply to every
+> session and are not duplicated here.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jobhuntpro_marketing** (1553 symbols, 4761 relationships, 88 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jobhuntpro_marketing** (1763 symbols, 5228 relationships, 94 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

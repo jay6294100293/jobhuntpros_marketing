@@ -13,7 +13,7 @@
 
 **Step 2 — Activate GitNexus:**
 Check if `gitnexus` MCP tools are available. Use `search_code` to verify
-every file you plan to touch. If not: `npx gitnexus analyze E:\jobhuntpro_marketing`
+every file you plan to touch. If not: `npx gitnexus analyze D:\NOVAJAY_TECH\jobhuntpro_marketing`
 
 **Step 3 — Activate agent:**
 - FastAPI / Python → `fastapi-developer`
@@ -38,7 +38,7 @@ npx skillkit install coreyhaines31/marketingskills --skill page-cro copywriting 
 
 - **Status:** Live at launchbusinessai.com — quality upgrade phase
 - **Core feature:** Magic Button → URL → 4 videos (all formats) + 3 scripts + 2 posters in 90s
-- **Backend:** FastAPI, `server.py` is entire backend (~3000 lines)
+- **Backend:** 7 modules — server.py (~4,496 lines) + legal_router.py (714) + admin_router.py (525) + modal_sadtalker.py (247) + modal_video.py (178) + brand_router.py (176) + jarvis_router.py (117)
 - **AI:** Gemini 2.5 Flash + Edge TTS (AndrewNeural, free, no key)
 - **GPU video:** Wan 2.2 TI2V-5B on Modal A10G — animates Hero slide ($0.03/clip)
 - **Tutorial Studio:** Chrome extension records product → AI narrates → YouTube tutorial

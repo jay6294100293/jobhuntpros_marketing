@@ -49,7 +49,7 @@ Brand colors extracted from the scraped URL are applied to every slide.
 - Positioned 20px from bottom
 
 ### 7. Watermark (Free Tier)
-- Diagonal "SwiftPack AI" text repeated across every slide
+- Diagonal "LaunchBusiness AI" text repeated across every slide
 - 30% opacity RGBA compositing — semi-transparent, not obstructive
 - Burned into slide content area, not corner (can't be cropped out)
 - Automatically removed on Starter+ plans
@@ -60,7 +60,7 @@ Brand colors extracted from the scraped URL are applied to every slide.
 | 9:16 | 1080×1920 | TikTok, Reels, Shorts, Stories | All tiers |
 | 16:9 | 1920×1080 | YouTube, website embeds, LinkedIn | Starter+ |
 | 1:1 | 1080×1080 | Instagram Feed, LinkedIn, Twitter/X | Starter+ |
-| 4:5 | 1080×1350 | Facebook Feed, Instagram Feed | Starter+ — NOT YET BUILT |
+| 4:5 | 1080×1350 | Facebook Feed, Instagram Feed | Starter+ — ✅ DONE — generated in parallel with other formats |
 
 Free tier: 9:16 only. Starter+ unlocks all formats.
 
@@ -68,18 +68,17 @@ Free tier: 9:16 only. Starter+ unlocks all formats.
 60% height. Never place important content in bottom 25% or right 15% of 9:16
 (platform engagement icons stack there).
 
-### 9. Hook Variants (NOT YET BUILT — Phase 8)
-Target: generate 3 different opening hooks per run from the same script framework.
-Each hook = different angle (pain / speed / social proof).
-Same video body, only first 5 seconds differ per hook.
-3 hooks × 4 formats = 12 videos from one brand brief.
+### 9. Hook Variants (✅ DONE — 3 scripts returned as hook_variants: PAS, Step-by-Step, Before/After)
+3 different scripts returned per Magic Button run from the same brand brief.
+Each script = different angle (PAS ad / Step-by-Step tutorial / Before-After transformation).
+Returned in response as hook_variants array alongside the 4 format videos.
 
-### 10. Logo on Slides (NOT YET BUILT — Phase 8)
-When a Brand Profile has an active logo set, render it on:
+### 10. Logo on Slides (✅ DONE — reads active_logo_url from brand profile, renders on Hero and CTA slides)
+When a Brand Profile has an active logo set, it is rendered on:
 - Hero slide: top-left, max height 60px, alpha-composited
 - CTA slide: bottom-center, max height 50px
 - All posters: corner brand mark
-Implementation: Pillow `Image.open(logo_path)` → `img.paste(logo, position, mask)`
+Implementation: Reads `active_logo_url` from brand profile → Pillow `Image.open()` → `img.paste(logo, position, mask)`
 No new dependency — pure Pillow.
 
 ---
@@ -185,7 +184,7 @@ Script (Gemini)
   ↓
 Edge TTS voiceover → WAV
   ↓
-Modal LTX-Video: text prompt → short AI video clip (MP4)
+Wan 2.2 TI2V-5B: text prompt + Hero slide image → short AI video clip (MP4)
   ↓
 FFmpeg: loop clip to full duration + scale to target resolution
 FFmpeg overlay: drawtext captions + drawbox progress bar
@@ -260,14 +259,14 @@ Free Pexels API: 200 requests/hour at pexels.com/api — sufficient for producti
 ALL tiers get the same video quality. Watermark is the ONLY free-tier restriction.
 
 Pipeline priority (all tiers):
-1. Hybrid (Pexels + LTX)   — when PEXELS_API_KEY + Modal both configured
-2. Pexels-only             — when only PEXELS_API_KEY set
-3. LTX-only                — when only Modal configured
-4. Slideshow fallback      — always works, zero dependency
+1. Hybrid (Pexels + Wan 2.2)   — when PEXELS_API_KEY + Modal both configured
+2. Pexels-only                 — when only PEXELS_API_KEY set
+3. Wan 2.2-only                — when only Modal configured
+4. Slideshow fallback          — always works, zero dependency
 
 ### Hybrid Pipeline (Pexels + LTX) — editor-quality output
-- LTX generates ONE short clip (33 frames = 1.3s) for cinematic intro
-- Same clip reversed = cinematic outro (ONE generation, TWO uses — cost: ~$0.15)
+- Wan 2.2 generates ONE short clip (33 frames = 1.3s) for cinematic intro
+- Same clip reversed = cinematic outro (ONE generation, TWO uses — cost: ~$0.03 (Wan 2.2 on A10G))
 - Pexels fetches 3 different clips (problem, solution, outcome segments)
 - Product screenshot PiP overlay during "solution" segment (rounded corners + shadow)
 - Brand logo top-left corner throughout (from brand profile active_logo_url)
@@ -318,7 +317,7 @@ Margin at 50% utilization (Wan 2.2):
 
 ### Generate Complete Video
 ```bash
-curl -X POST https://swiftpackai.tech/api/create-complete-video \
+curl -X POST https://launchbusinessai.com/api/create-complete-video \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -335,27 +334,27 @@ curl -X POST https://swiftpackai.tech/api/create-complete-video \
 
 ### Magic Button (All-in-one)
 ```bash
-curl -X POST https://swiftpackai.tech/api/magic-launch-pack \
+curl -X POST https://launchbusinessai.com/api/magic-launch-pack \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://yourproduct.com"}'
-# Returns: 2 videos + 2 scripts + 2 posters
+# Returns: 4 videos + 3 scripts + 2 posters
 ```
 
 ### Talking Head
 ```bash
 # Step 1: verify identity (returns Stripe session URL)
-curl -X POST https://swiftpackai.tech/api/talking-head/verify-identity \
+curl -X POST https://launchbusinessai.com/api/talking-head/verify-identity \
   -H "Authorization: Bearer <token>"
 
 # Step 2: record consent
-curl -X POST https://swiftpackai.tech/api/talking-head/consent \
+curl -X POST https://launchbusinessai.com/api/talking-head/consent \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"photo_hash": "<sha256 of portrait>", "audio_hash": "<sha256 of audio>"}'
 
 # Step 3: generate
-curl -X POST https://swiftpackai.tech/api/talking-head/generate \
+curl -X POST https://launchbusinessai.com/api/talking-head/generate \
   -H "Authorization: Bearer <token>" \
   -F "portrait=@portrait.jpg" \
   -F "audio=@voiceover.mp3" \

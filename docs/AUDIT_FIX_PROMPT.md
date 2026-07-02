@@ -1,4 +1,4 @@
-# CONTENT STUDIO — AUDIT FIX PROMPT
+# LAUNCHBUSINESS AI — AUDIT FIX PROMPT
 # Use this AFTER running AUDIT_PROMPT.md and getting a report.
 
 ---
@@ -22,7 +22,7 @@ YOUR TASK: Fix all [PRIORITY] items from the audit report.
 RULES:
 - Fix items ONE AT A TIME
 - After each backend fix, test the endpoint:
-  curl http://localhost:8001/api/health
+  curl http://localhost:8001/api/
   OR the specific endpoint that was fixed
 - NEVER block the FastAPI event loop — all video/poster generation
   must run in asyncio.run_in_executor(), never synchronously

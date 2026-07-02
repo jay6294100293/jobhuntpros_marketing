@@ -1,4 +1,4 @@
-﻿import urllib3
+import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Depends, Security, Request, Response
@@ -14,7 +14,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -33,6 +33,7 @@ from PIL import Image, ImageDraw, ImageFont
 from collections import Counter, defaultdict
 import re
 import ipaddress
+import socket
 import time
 from google import genai
 import subprocess
@@ -92,12 +93,18 @@ for _candidate in _FFMPEG_CANDIDATES:
 # ── Auth / Billing config ──────────────────────────────────────────────────────
 JWT_SECRET = os.getenv('JWT_SECRET', 'dev-jwt-secret-change-in-production')
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRE_HOURS = 24 * 7  # 7 days
+JWT_EXPIRE_HOURS = 24  # 24 hours — balance security vs UX; 7d was too long for a stolen token
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8001')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# Product discriminator stamped into Stripe metadata so this product's webhook endpoint
+# ignores events belonging to sibling products on the SHARED Stripe account. The signing
+# secret does NOT isolate products on a shared account — every endpoint can validly verify
+# every account-wide event — so isolation must come from metadata.
+PRODUCT_TAG = "launchbusiness"
 
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
@@ -370,7 +377,21 @@ def _is_safe_url(url: str) -> bool:
             if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
                 return False
         except ValueError:
-            pass  # hostname, not a bare IP — fine
+            # hostname, not a bare IP — resolve it and check every returned address
+            # to catch DNS-rebinding SSRF (e.g. evil.com → 10.0.0.1)
+            try:
+                resolved = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+                for *_, sockaddr in resolved:
+                    ip_str = sockaddr[0]
+                    try:
+                        resolved_addr = ipaddress.ip_address(ip_str)
+                        if (resolved_addr.is_private or resolved_addr.is_loopback
+                                or resolved_addr.is_link_local or resolved_addr.is_reserved):
+                            return False
+                    except ValueError:
+                        pass
+            except OSError:
+                return False  # DNS failure — fail closed
 
         # Block Tor and high-abuse TLDs
         for tld in _BLOCKED_TLDS:
@@ -462,6 +483,10 @@ async def _safe_http_get(url: str, headers: dict | None = None, max_redirects: i
 # Compose, Supervisor). Upgrade to a Redis-backed limiter (e.g. slowapi +
 # redis) when running multiple uvicorn workers.
 _rate_store: dict = defaultdict(list)
+# Global cap on concurrent FFmpeg video renders. 4 parallel renders × N concurrent users
+# will OOM the 1GB Contabo VPS. 2 slots keeps peak RAM safe while still parallelising
+# within a single Magic Button request (renders 1+2 start immediately; 3+4 wait for a slot).
+_VIDEO_RENDER_SEM = asyncio.Semaphore(2)
 _RATE_LIMITS = {
     "/api/magic-button": 5,
     "/api/magic-launch-pack": 5,
@@ -469,8 +494,10 @@ _RATE_LIMITS = {
     "/api/generate-script": 20,
     "/api/generate-voiceover": 20,
     "/api/scrape": 30,
-    "/api/auth/register": 10,
-    "/api/auth/login": 20,
+    "/api/auth/register": 5,
+    "/api/auth/login": 5,
+    "/api/auth/forgot-password": 3,
+    "/api/auth/resend-verification": 3,
     "/api/talking-head/generate": 3,   # expensive GPU call — 3/min hard cap
     "/api/talking-head/consent": 10,
     "/api/talking-head/verify-identity": 5,
@@ -493,15 +520,19 @@ async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     limit = _RATE_LIMITS.get(path)
     if limit:
-        ip = request.client.host if request.client else "unknown"
+        # X-Real-IP is set by Nginx; fall back to direct host for local dev
+        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
         now = time.time()
-        _rate_store[ip] = [t for t in _rate_store[ip] if now - t < 60]
-        if len(_rate_store[ip]) >= limit:
+        recent = [t for t in _rate_store.get(ip, []) if now - t < 60]
+        if not recent:
+            _rate_store.pop(ip, None)  # evict stale entry — prevents unbounded dict growth
+        if len(recent) >= limit:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded. Please wait a moment and try again."}
             )
-        _rate_store[ip].append(now)
+        recent.append(now)
+        _rate_store[ip] = recent
     return await call_next(request)
 
 
@@ -542,6 +573,11 @@ async def startup_db_client():
         # stripe_events needs no extra index: its _id IS the Stripe event id (unique).
         await db.payment_transactions.create_index("event_id", background=True)
         await db.payment_transactions.create_index("user_id",  background=True)
+        # TTL on stripe_events: Stripe's replay window is 7 days; keep for 90 so any
+        # manual reconciliation can reference them, then auto-prune to prevent unbounded growth.
+        await db.stripe_events.create_index(
+            "received_at", expireAfterSeconds=90 * 24 * 3600, background=True
+        )
         logger.info("MongoDB indexes: OK")
     except Exception as e:
         logger.error(f"MongoDB index creation failed: {e}")
@@ -612,11 +648,20 @@ class PosterRequest(BaseModel):
     profile_id: Optional[str] = None
 
 class MagicButtonRequest(BaseModel):
-    url: str
+    url: Optional[str] = None
     product_name: str
     target_audience: str
     creative_direction: Optional[str] = Field(default=None, max_length=300)
     profile_id: Optional[str] = None
+    # Description mode — used when the product has no public URL
+    user_description: Optional[str] = Field(default=None, max_length=500)
+    user_features: Optional[List[str]] = Field(default=None, max_length=3)
+
+    @model_validator(mode="after")
+    def require_url_or_description(self) -> "MagicButtonRequest":
+        if not self.url and not self.user_description:
+            raise ValueError("Provide either a product URL or a product description.")
+        return self
 
 class Project(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -968,7 +1013,7 @@ def _make_slide_hero(width, height, color1, color2, product_name, headline, dest
 
     # Product name tag
     tag_font = _get_regular_font(max(18, width // 42))
-    tag = product_name.upper()[:24] if product_name else "SWIFTPACK AI"
+    tag = product_name.upper()[:24] if product_name else "LAUNCHBUSINESS AI"
     tag_y = int(height * 0.12)
     _draw_text_centered(draw, tag, tag_font, tag_y, width, (*_lighten(c1, 0.7),), shadow=False)
 
@@ -2181,12 +2226,35 @@ async def scrape_url(url: str = Form(...)):
 
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
+# Extension blocklist — block executable and script file types regardless of content.
+_BLOCKED_UPLOAD_EXTENSIONS = {
+    '.php', '.py', '.rb', '.sh', '.bash', '.zsh', '.fish', '.pl',
+    '.cgi', '.asp', '.aspx', '.jsp', '.exe', '.dll', '.so',
+    '.bat', '.cmd', '.ps1', '.vbs',
+}
+# Magic byte prefixes for known executable/binary formats.
+# Checked against the first 16 bytes before writing to disk.
+_BLOCKED_UPLOAD_MAGIC = [
+    b'\x4d\x5a',           # PE / Windows EXE (MZ header)
+    b'\x7fELF',            # Linux/Unix ELF binary
+    b'\xca\xfe\xba\xbe',   # Mach-O fat binary
+    b'\xfe\xed\xfa\xce',   # Mach-O 32-bit
+    b'\xfe\xed\xfa\xcf',   # Mach-O 64-bit
+    b'#!/',                 # Unix shebang
+    b'<?php',               # PHP script
+]
+
+
 @api_router.post("/upload")
-async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
+async def upload_file(file: UploadFile = File(...), file_type: str = Form(...), user=Depends(get_current_user)):
+    ext = Path(file.filename).suffix.lower()
+    if ext in _BLOCKED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=415, detail=f"File type '{ext}' is not allowed.")
+
     file_id = str(uuid.uuid4())
-    file_ext = Path(file.filename).suffix
-    file_path = UPLOADS_DIR / f"{file_id}{file_ext}"
+    file_path = UPLOADS_DIR / f"{file_id}{Path(file.filename).suffix}"
     total = 0
+    header_checked = False
     try:
         async with aiofiles.open(file_path, 'wb') as f:
             chunk_size = 256 * 1024  # 256 KB chunks
@@ -2194,6 +2262,12 @@ async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
                 chunk = await file.read(chunk_size)
                 if not chunk:
                     break
+                if not header_checked:
+                    header = chunk[:16]
+                    for magic in _BLOCKED_UPLOAD_MAGIC:
+                        if header[:len(magic)] == magic:
+                            raise HTTPException(status_code=415, detail="File content is not allowed.")
+                    header_checked = True
                 total += len(chunk)
                 if total > _MAX_UPLOAD_BYTES:
                     raise HTTPException(status_code=413, detail="File too large. Maximum size is 50 MB.")
@@ -2215,7 +2289,7 @@ async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
 
 
 @api_router.delete("/upload/{file_id}")
-async def delete_upload(file_id: str):
+async def delete_upload(file_id: str, user=Depends(get_current_user)):
     # Prevent path traversal: file_id must be a plain UUID
     if not re.match(r'^[0-9a-f\-]{36}$', file_id):
         raise HTTPException(status_code=400, detail="Invalid file ID")
@@ -2957,10 +3031,19 @@ async def create_poster(request: PosterRequest, user = Depends(get_optional_user
         raise HTTPException(status_code=500, detail=f"Poster creation failed: {str(e)}")
 
 
-async def _magic_launch_pack_handler(request: MagicButtonRequest):
+async def _magic_launch_pack_handler(request: MagicButtonRequest, user: dict):
     """Shared logic for magic-button and magic-launch-pack."""
-    # Step 1: Scrape
-    brand_data = await scrape_url(url=request.url)
+    # Step 1: Scrape public URL, or build brand_data from user-provided description
+    if request.url:
+        brand_data = await scrape_url(url=request.url)
+    else:
+        brand_data = {
+            "colors": ["#6366f1", "#8b5cf6"],
+            "features": (request.user_features or [])[:3] or ["Easy to use", "Fast", "Reliable"],
+            "description": request.user_description or "",
+            "images": [],
+            "title": request.product_name,
+        }
 
     # Step 2 & 3: Scripts — generate all 5 format-specific scripts concurrently.
     # Each format gets a word-count-targeted prompt so audio length matches video format.
@@ -2977,11 +3060,11 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
         )
 
     _script_results = await asyncio.gather(
-        generate_script(_make_req("PAS",          "9:16"), user=None),
-        generate_script(_make_req("Step-by-Step", "16:9"), user=None),
-        generate_script(_make_req("Before/After", "9:16"), user=None),
-        generate_script(_make_req("PAS",          "1:1"),  user=None),
-        generate_script(_make_req("PAS",          "4:5"),  user=None),
+        generate_script(_make_req("PAS",          "9:16"), user=user),
+        generate_script(_make_req("Step-by-Step", "16:9"), user=user),
+        generate_script(_make_req("Before/After", "9:16"), user=user),
+        generate_script(_make_req("PAS",          "1:1"),  user=user),
+        generate_script(_make_req("PAS",          "4:5"),  user=user),
         return_exceptions=True,
     )
     def _ok(r, fallback=""):
@@ -3018,10 +3101,11 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
 
     async def _make_video(script_text: str, fmt: str) -> Optional[dict]:
         try:
-            return await create_complete_video(
-                CompleteVideoRequest(script=script_text, format=fmt, **_common),
-                user=None
-            )
+            async with _VIDEO_RENDER_SEM:
+                return await create_complete_video(
+                    CompleteVideoRequest(script=script_text, format=fmt, **_common),
+                    user=user
+                )
         except Exception as exc:
             logger.warning(f"Video {fmt} failed: {exc}")
             return None
@@ -3044,13 +3128,13 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
         subtext=brand_data["description"][:50],
         brand_colors=brand_data["colors"],
         format="1:1"
-    ), user=None)
+    ), user=user)
     poster2 = await create_poster(PosterRequest(
         headline=request.product_name,
         subtext="Transform Your Workflow",
         brand_colors=brand_data["colors"],
         format="9:16"
-    ), user=None)
+    ), user=user)
 
     return {
         "brand_data": brand_data,
@@ -3068,9 +3152,9 @@ async def _magic_launch_pack_handler(request: MagicButtonRequest):
 
 
 @api_router.post("/magic-launch-pack")
-async def magic_launch_pack(request: MagicButtonRequest):
+async def magic_launch_pack(request: MagicButtonRequest, user=Depends(get_current_user)):
     try:
-        return await _magic_launch_pack_handler(request)
+        return await _magic_launch_pack_handler(request, user)
     except HTTPException:
         raise
     except Exception as e:
@@ -3081,9 +3165,9 @@ async def magic_launch_pack(request: MagicButtonRequest):
 
 
 @api_router.post("/magic-button")
-async def magic_button(request: MagicButtonRequest):
+async def magic_button(request: MagicButtonRequest, user=Depends(get_current_user)):
     try:
-        return await _magic_launch_pack_handler(request)
+        return await _magic_launch_pack_handler(request, user)
     except HTTPException:
         raise
     except Exception as e:
@@ -3259,7 +3343,9 @@ async def login(req: LoginRequest):
     if str(user.get("email", "")).lower() in ADMIN_EMAILS and not user.get("is_admin"):
         await db.users.update_one({"id": user["id"]}, {"$set": {"is_admin": True}})
         user["is_admin"] = True
-    safe = {k: v for k, v in user.items() if k not in ("_id", "hashed_password")}
+    _LOGIN_STRIP = ("_id", "hashed_password", "password_reset_token",
+                    "password_reset_expires", "email_verification_token")
+    safe = {k: v for k, v in user.items() if k not in _LOGIN_STRIP}
     safe["is_admin"] = resolve_is_admin(user)
     return {"token": token, "user": safe}
 
@@ -3411,6 +3497,68 @@ async def delete_account(req: DeleteAccountRequest, user = Depends(get_current_u
     logger.info(f"Account erased: user {user_id} — {deleted}")
 
     return {"status": "deleted", "deleted": deleted}
+
+
+@auth_router.get("/export-data")
+async def export_data(user=Depends(get_current_user)):
+    """Export all personal data for the current user (GDPR Art. 20 right to portability).
+
+    Returns a JSON bundle of every user-owned record across all collections.
+    Sensitive fields (hashed_password, reset tokens) are stripped before export.
+    payment_transactions are included — they belong to the user and are portable.
+    """
+    user_id = user["id"]
+
+    async def _collect(collection: str, filter_key: str = "user_id") -> list:
+        try:
+            docs = await db[collection].find(
+                {filter_key: user_id}, {"_id": 0}
+            ).to_list(None)
+            return docs
+        except Exception as e:
+            logger.error(f"Data export failed for {collection} ({user_id}): {e}")
+            return []
+
+    # legal_chat is keyed by profile_id — resolve first
+    legal_chat_docs: list = []
+    try:
+        profiles = await db.legal_profiles.find(
+            {"user_id": user_id}, {"id": 1, "_id": 0}
+        ).to_list(None)
+        profile_ids = [p["id"] for p in profiles if p.get("id")]
+        if profile_ids:
+            legal_chat_docs = await db.legal_chat.find(
+                {"profile_id": {"$in": profile_ids}}, {"_id": 0}
+            ).to_list(None)
+    except Exception as e:
+        logger.error(f"Data export failed for legal_chat ({user_id}): {e}")
+
+    # Strip fields that must never leave the server
+    safe_user = {
+        k: v for k, v in user.items()
+        if k not in ("hashed_password", "password_reset_token", "password_reset_expires")
+    }
+
+    export = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": safe_user,
+        "usage": await _collect("usage"),
+        "legal_profiles": await _collect("legal_profiles"),
+        "legal_documents": await _collect("legal_documents"),
+        "legal_credits_usage": await _collect("legal_credits_usage"),
+        "legal_chat": legal_chat_docs,
+        "logos": await _collect("logos"),
+        "brand_profiles": await _collect("brand_profiles"),
+        "projects": await _collect("projects"),
+        "payment_transactions": await _collect("payment_transactions"),
+        "talking_head_consents": await _collect("talking_head_consents"),
+    }
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": "attachment; filename=launchbusinessai-data-export.json"},
+    )
 
 
 @auth_router.post("/accept-agreement")
@@ -3756,14 +3904,30 @@ async def _create_stripe_checkout(user: dict, price_id: str, target_tier: str) -
         raise HTTPException(status_code=503, detail=f"{target_tier.title()} price ID not configured yet.")
     if user.get("tier") == target_tier:
         raise HTTPException(status_code=400, detail=f"Already on the {target_tier} plan.")
+    # Reuse an existing Stripe Customer when we have one (avoids minting a duplicate
+    # Customer on every re-subscribe, which would leave stale stripe_customer_id values).
+    customer_kwargs = (
+        {"customer": user["stripe_customer_id"]}
+        if user.get("stripe_customer_id")
+        else {"customer_email": user["email"]}
+    )
+    # PRODUCT_TAG + subscription_data.metadata so that subscription/invoice events
+    # (which carry NO session metadata) can be isolated to this product and mapped back
+    # to the user. See docs/decisions/2026-06-22-stripe-subscription-sync-and-failure-handling.md
+    sub_metadata = {
+        "user_id": user["id"],
+        "target_tier": target_tier,
+        "product": PRODUCT_TAG,
+    }
     session = stripe_lib.checkout.Session.create(
-        customer_email=user["email"],
+        **customer_kwargs,
         payment_method_types=["card"],
         line_items=[{"price": price_id, "quantity": 1}],
         mode="subscription",
         success_url=f"{FRONTEND_URL}?upgraded=true",
         cancel_url=f"{FRONTEND_URL}/pricing",
-        metadata={"user_id": user["id"], "target_tier": target_tier}
+        metadata={"user_id": user["id"], "target_tier": target_tier, "product": PRODUCT_TAG},
+        subscription_data={"metadata": sub_metadata},
     )
     return {"checkout_url": session.url}
 
@@ -3787,6 +3951,24 @@ async def checkout_agency(user = Depends(get_current_user)):
 @billing_router.post("/checkout")
 async def create_checkout_session(user = Depends(get_current_user)):
     return await _create_stripe_checkout(user, STRIPE_PRO_PRICE_ID, "pro")
+
+
+@billing_router.post("/portal")
+async def billing_portal(user = Depends(get_current_user)):
+    """Open a Stripe Customer Portal session for the authenticated user.
+
+    Lets them cancel, change payment method, or view invoices without
+    contacting support. Returns a short-lived portal URL.
+    """
+    if not stripe_lib or not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Billing not configured. Contact support.")
+    if not user.get("stripe_customer_id"):
+        raise HTTPException(status_code=400, detail="No billing account found. Subscribe to a paid plan first.")
+    session = stripe_lib.billing_portal.Session.create(
+        customer=user["stripe_customer_id"],
+        return_url=f"{FRONTEND_URL}/settings",
+    )
+    return {"portal_url": session.url}
 
 
 # ── Stripe webhook idempotency + payment ledger ───────────────────────────────
@@ -3823,17 +4005,30 @@ async def _unclaim_stripe_event(event_id: str):
         logger.error(f"Failed to release stripe_events claim {event_id}")
 
 
+def _event_is_foreign(metadata: dict) -> bool:
+    """True only when metadata explicitly belongs to a DIFFERENT product on the shared
+    Stripe account. An absent product tag is treated as ours (NOT foreign) so that
+    subscriptions created before product tagging — and customer-id reverse mapping — keep
+    working. Sibling products carry their own tag → foreign → skipped."""
+    p = (metadata or {}).get("product")
+    return bool(p) and p != PRODUCT_TAG
+
+
 async def _record_payment_transaction(event: dict, kind: str, **fields):
     """Append one row to the payment_transactions ledger. Best-effort — a ledger
     write must never break the user's upgrade, but is logged if it fails."""
     try:
         obj = event.get("data", {}).get("object", {})
+        # Subscriptions have no amount_total; invoices use amount_due/amount_paid (cents).
+        amount = obj.get("amount_total")
+        if amount is None:
+            amount = obj.get("amount_due") if obj.get("amount_due") is not None else obj.get("amount_paid")
         await db.payment_transactions.insert_one({
             "_id": str(uuid.uuid4()),
             "event_id": event["id"],
             "raw_event_type": event.get("type"),
             "kind": kind,
-            "amount_total": obj.get("amount_total"),   # cents, may be None for subs
+            "amount_total": amount,   # cents, may be None for some events
             "currency": obj.get("currency"),
             "created_at": datetime.now(timezone.utc).isoformat(),
             **fields,
@@ -3868,8 +4063,13 @@ async def stripe_webhook_handler(request: Request):
             metadata = session.get("metadata", {})
             user_id = metadata.get("user_id")
             customer_id = session.get("customer")
+            subscription_id = session.get("subscription")  # None for one-time topups
 
-            if metadata.get("type") == "legal_topup":
+            # Isolation: ignore sessions belonging to a sibling product on the shared
+            # Stripe account (explicit foreign product tag). Absent tag = ours.
+            if _event_is_foreign(metadata):
+                logger.info(f"Stripe event {event['id']} belongs to another product — ignoring")
+            elif metadata.get("type") == "legal_topup":
                 # ── Legal credit topup (one-time payment) ──
                 credits = int(metadata.get("credits", 0))
                 if user_id and credits > 0:
@@ -3886,10 +4086,16 @@ async def stripe_webhook_handler(request: Request):
                 # ── Subscription upgrade ──
                 target_tier = metadata.get("target_tier", "pro")
                 if user_id:
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"tier": target_tier, "stripe_customer_id": customer_id}}
-                    )
+                    # Persist subscription id so subscription/invoice events map back to
+                    # this user; clear any stale past-due billing_status on a fresh start.
+                    set_fields = {
+                        "tier": target_tier,
+                        "stripe_customer_id": customer_id,
+                        "billing_status": "active",
+                    }
+                    if subscription_id:
+                        set_fields["stripe_subscription_id"] = subscription_id
+                    await db.users.update_one({"id": user_id}, {"$set": set_fields})
                     logger.info(f"User {user_id} upgraded to {target_tier}")
                     await _record_payment_transaction(
                         event, "subscription_upgrade", user_id=user_id,
@@ -3899,32 +4105,72 @@ async def stripe_webhook_handler(request: Request):
         elif event["type"] == "customer.subscription.updated":
             sub = event["data"]["object"]
             customer_id = sub.get("customer")
-            items = sub.get("items", {}).get("data", [])
-            if customer_id and items:
-                price_id = items[0].get("price", {}).get("id", "")
+            if _event_is_foreign(sub.get("metadata", {})):
+                logger.info(f"Stripe event {event['id']} belongs to another product — ignoring")
+            elif customer_id:
+                status = sub.get("status", "")
+                items = sub.get("items", {}).get("data", [])
+                price_id = items[0].get("price", {}).get("id", "") if items else ""
                 new_tier = price_map.get(price_id)
-                if new_tier:
+                # CRITICAL money-path: only grant the paid tier while Stripe says the
+                # subscription is actually being paid. past_due/unpaid/incomplete/canceled
+                # ⇒ downgrade to free so the monthly allowance stops. Self-heals: a later
+                # status=active update restores the tier.
+                if status in ("active", "trialing") and new_tier:
                     await db.users.update_one(
                         {"stripe_customer_id": customer_id},
-                        {"$set": {"tier": new_tier}}
+                        {"$set": {"tier": new_tier, "billing_status": status}}
                     )
-                    logger.info(f"Subscription updated: {customer_id} → {new_tier}")
+                    logger.info(f"Subscription updated: {customer_id} → {new_tier} ({status})")
                     await _record_payment_transaction(
                         event, "subscription_updated",
                         stripe_customer_id=customer_id, tier=new_tier,
                     )
+                elif status not in ("active", "trialing"):
+                    await db.users.update_one(
+                        {"stripe_customer_id": customer_id},
+                        {"$set": {"tier": "free", "billing_status": status}}
+                    )
+                    logger.info(f"Subscription not in good standing ({status}): {customer_id} → free")
+                    await _record_payment_transaction(
+                        event, "subscription_downgraded",
+                        stripe_customer_id=customer_id, tier="free",
+                    )
 
         elif event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
-            customer_id = event["data"]["object"].get("customer")
-            if customer_id:
+            sub = event["data"]["object"]
+            customer_id = sub.get("customer")
+            if _event_is_foreign(sub.get("metadata", {})):
+                logger.info(f"Stripe event {event['id']} belongs to another product — ignoring")
+            elif customer_id:
                 await db.users.update_one(
                     {"stripe_customer_id": customer_id},
-                    {"$set": {"tier": "free"}}
+                    {"$set": {"tier": "free", "billing_status": "canceled"}}
                 )
                 logger.info(f"Subscription ended: {customer_id} downgraded to free")
                 await _record_payment_transaction(
                     event, "subscription_ended",
                     stripe_customer_id=customer_id, tier="free",
+                )
+
+        elif event["type"] == "invoice.payment_failed":
+            # A renewal charge failed. Stripe also fires subscription.updated(past_due),
+            # which is what actually stops the entitlement; here we flag billing_status and
+            # persist a failure audit row (covers "money temporarily held then released").
+            invoice = event["data"]["object"]
+            customer_id = invoice.get("customer")
+            sub_meta = invoice.get("subscription_details", {}).get("metadata", {}) or {}
+            if _event_is_foreign(sub_meta):
+                logger.info(f"Stripe event {event['id']} belongs to another product — ignoring")
+            elif customer_id:
+                await db.users.update_one(
+                    {"stripe_customer_id": customer_id},
+                    {"$set": {"billing_status": "past_due"}}
+                )
+                logger.info(f"Invoice payment failed: {customer_id} flagged past_due")
+                await _record_payment_transaction(
+                    event, "payment_failed",
+                    stripe_customer_id=customer_id,
                 )
     except Exception:
         await _unclaim_stripe_event(event["id"])
@@ -3988,7 +4234,7 @@ async def billing_portal(user = Depends(get_current_user)):
 talking_router = APIRouter(prefix="/api/talking-head")
 
 # Reuse Modal SadTalker app name from env (or default)
-MODAL_SADTALKER_APP = os.getenv('MODAL_SADTALKER_APP', 'swiftpack-sadtalker')
+MODAL_SADTALKER_APP = os.getenv('MODAL_SADTALKER_APP', 'launchbusiness-sadtalker')
 
 
 class ConsentRequest(BaseModel):

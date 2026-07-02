@@ -99,3 +99,56 @@ def test_ledger_indexes_created(server_src):
     assert "payment_transactions.create_index" in server_src, (
         "payment_transactions indexes were removed from startup"
     )
+
+
+# ── Subscription-sync / isolation / failure-handling guards (2026-06-22) ──────────
+# See docs/decisions/2026-06-22-stripe-subscription-sync-and-failure-handling.md
+
+
+def test_product_isolation_helper_wired(server_ast, server_src):
+    """Shared Stripe account: the webhook must filter sibling-product events by an
+    explicit product tag, not rely on accidental UUID non-collision."""
+    assert 'PRODUCT_TAG = "launchbusiness"' in server_src, "PRODUCT_TAG removed"
+    assert _func(server_ast, "_event_is_foreign") is not None, "missing _event_is_foreign()"
+    node = _func(server_ast, "stripe_webhook_handler")
+    calls = [
+        n.func.id
+        for n in ast.walk(node)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    ]
+    assert calls.count("_event_is_foreign") >= 3, (
+        "stripe_webhook_handler() no longer screens every money branch for foreign-product "
+        "events — sibling products on the shared Stripe account could be acted on"
+    )
+
+
+def test_subscription_updated_is_status_aware(server_src):
+    """customer.subscription.updated must only grant a paid tier while the subscription
+    is actually being paid — otherwise a past_due/unpaid sub keeps its monthly allowance."""
+    assert '"active", "trialing"' in server_src or "'active', 'trialing'" in server_src, (
+        "subscription.updated no longer gates the tier grant on Stripe billing status — "
+        "failed renewals would keep granting credits"
+    )
+
+
+def test_payment_failed_handled(server_src):
+    """A failed renewal must be handled (flagged + audited), not silently ignored."""
+    assert "invoice.payment_failed" in server_src, (
+        "invoice.payment_failed branch removed — failed renewals leave no local audit trail"
+    )
+    assert '"payment_failed"' in server_src, "payment_failed ledger row removed"
+
+
+def test_subscription_id_persisted_on_checkout(server_src):
+    """We must store stripe_subscription_id so subscription/invoice events map to a user."""
+    assert "stripe_subscription_id" in server_src, (
+        "stripe_subscription_id no longer persisted at checkout"
+    )
+
+
+def test_checkout_sets_subscription_metadata(server_src):
+    """subscription_data.metadata carries user_id+product so metadata-less subscription/
+    invoice events stay isolated and mappable."""
+    assert "subscription_data" in server_src, (
+        "checkout no longer sets subscription_data metadata"
+    )

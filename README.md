@@ -13,8 +13,8 @@ LaunchBusiness AI is a two-pillar platform for founders:
 ### 🚀 Pillar 1 — Marketing Launch Pack
 Paste your product URL. Get a complete marketing pack in 90 seconds:
 - **Logo** — 6 AI-powered templates + Ideogram AI concepts
-- **2 Videos** — Ad (9:16) + Tutorial (16:9) with neural voiceover, animated captions, crossfade transitions
-- **2 Scripts** — PAS framework + Step-by-Step tutorial via Gemini 2.5 Flash
+- **4 Videos (9:16, 16:9, 1:1, 4:5)** — TikTok, YouTube, Instagram, Facebook formats with neural voiceover, animated captions, crossfade transitions
+- **3 Scripts (PAS, Step-by-Step, Before/After)** — Marketing frameworks via Gemini 2.5 Flash
 - **2 Posters** — Brand-matched social graphics (1:1 + 9:16)
 
 ### ⚖️ Pillar 2 — Legal Documents
@@ -77,9 +77,11 @@ AI-powered legal document generation with 2026 law context:
 ```
 jobhuntpro_marketing/
 ├── backend/
-│   ├── server.py              # FastAPI backend (~2900 lines) — all core routes
+│   ├── server.py              # FastAPI backend (~4,496 lines) — core routes: auth, video, posters, Stripe, Magic Button
 │   ├── legal_router.py        # Legal documents feature — profiles, chat, generate
 │   ├── jarvis_router.py       # JARVIS business intelligence endpoint
+│   ├── admin_router.py            # Admin panel — user management, coupons, system audit
+│   ├── brand_router.py            # Brand profile CRUD — logo, colors, active brand
 │   ├── modal_video.py         # Modal Wan 2.2 TI2V-5B serverless GPU app
 │   ├── modal_sadtalker.py     # Modal SadTalker talking head GPU app
 │   ├── requirements.txt       # Python dependencies
@@ -109,7 +111,7 @@ jobhuntpro_marketing/
 │   ├── PRODUCT_STRATEGY.md    # Business model + roadmap
 │   └── VIDEO_FEATURES.md      # Video pipeline documentation
 │
-├── docker-compose.yml         # Production Docker Compose
+├── docker-compose.yml         # Local development Docker Compose
 └── README.md                  # This file
 ```
 
@@ -159,7 +161,7 @@ Open `http://localhost:3000`
 
 ### Marketing
 ```
-POST /api/magic-launch-pack     URL → 2 videos + 2 scripts + 2 posters (all-in-one)
+POST /api/magic-launch-pack     URL → 4 videos + 3 scripts + 2 posters (all-in-one)
 POST /api/scrape                URL → brand data
 POST /api/generate-script       AI script generation
 POST /api/create-complete-video Full video with TTS + captions
@@ -252,7 +254,7 @@ Pull-based auto-deploy — push to `main`, server picks it up within 5 minutes.
 ssh -i ~/Downloads/novajaytechserver_testing-key.pem root@YOUR_SERVER_IP
 
 # Rebuild + restart
-cd /root/swiftpack
+cd /opt/swiftpack
 git pull
 docker compose build backend && docker compose up -d backend
 docker restart swiftpack-nginx-1   # always restart nginx after backend
@@ -263,8 +265,8 @@ docker logs swiftpack-backend-1 --tail=50
 
 ### Fresh server setup
 ```bash
-git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /root/swiftpack
-bash /root/swiftpack/scripts/setup-cron.sh
+git clone https://github.com/jay6294100293/jobhuntpros_marketing.git /opt/swiftpack
+bash /opt/swiftpack/scripts/setup-cron.sh
 nano /root/secrets/swiftpack.env
 ```
 

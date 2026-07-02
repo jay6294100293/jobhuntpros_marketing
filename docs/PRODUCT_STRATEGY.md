@@ -80,7 +80,7 @@ Paid adds LIMITS REMOVAL and POWER FEATURES, not basic quality.
 ### Starter — $19/month
 - 15 generations/month
 - No watermark
-- All 3 formats (9:16, 16:9, 1:1)
+- All 4 formats (9:16, 16:9, 1:1, 4:5)
 - Pre-made animated characters
 - Download scripts
 - Standard queue
@@ -89,19 +89,19 @@ Paid adds LIMITS REMOVAL and POWER FEATURES, not basic quality.
 - 50 generations/month
 - Everything in Starter
 - Talking head — upload your photo → you become the presenter (SadTalker)
-- 5 saved brand profiles
+- 3 business profiles
 - Priority queue (2x faster)
-- Overage: $2/generation
+- Overage: $2/generation *(Note: Overage pricing not yet implemented — users currently hit a hard HTTP 429 block at tier limit.)*
 
 ### Agency — $149/month
 - 200 generations/month
 - Everything in Pro
 - 5 team seats
-- White label (remove SwiftPack AI branding)
+- White label (remove LaunchBusiness AI branding)
 - Multiple talking head profiles (5 people)
 - API access
 - Dedicated support
-- Overage: $1.50/generation
+- Overage: $1.50/generation *(Note: Overage pricing not yet implemented — users currently hit a hard HTTP 429 block at tier limit.)*
 
 ### Annual Pricing (20% discount)
 - Starter: $182/year
@@ -185,7 +185,7 @@ If it goes down, all of Mother goes down. Never route SwiftPack traffic to it.
 Corner watermarks DON'T work — users crop them in 5 seconds.
 
 What works:
-1. Burn "SwiftPack AI" as a design element inside the slide content area
+1. Burn "LaunchBusiness AI" as a design element inside the slide content area
    (integrated into the template, not overlaid — cropping destroys content)
 2. Invisible steganographic watermark on every frame (python `invisible-watermark`)
    — encodes user ID invisibly, detectable by our server for abuse tracing
@@ -263,16 +263,16 @@ Permanent account ban on violation.
 4. ~~Upgrade prompts at generation limit~~ ✅ — HTTP 429 with upgrade message
 5. **To activate**: add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_*_PRICE_ID to secrets file
 
-### Phase 3 — GPU Video Engine — REVISED: Wan 2.2 replaces LTX-Video
+### Phase 3 — GPU Video Engine — ✅ DONE — code implemented (deploy pending)
 1. ~~Modal.com account + deployment~~ ✅ — infrastructure ready
-2. ~~LTX-Video~~ → **REPLACE with Wan 2.2 TI2V-5B** — rewrite `backend/modal_video.py`
-   - New GPU: A10G (not A100) — fits Wan 2.2 5B FP8 in 24GB, costs 3× less
-   - New APP_NAME: `launchbusiness-wan-video` (fixes silent mismatch bug)
-   - Adds image input: Hero Pillow slide as starting frame
+2. ~~LTX-Video~~ → ~~REPLACE with Wan 2.2 TI2V-5B~~ ✅ — `backend/modal_video.py` rewritten
+   - GPU: A10G (24GB) — fits Wan 2.2 5B FP8, costs 3× less than A100
+   - APP_NAME: `launchbusiness-wan-video` (mismatch bug fixed)
+   - Image input: Hero Pillow slide as starting frame
    - Cost: ~$0.03/clip vs $0.44 (14× cheaper)
-3. ~~Route pro users to Modal~~ → Route ALL PAID TIERS to Wan 2.2 (Starter/Pro/Agency)
+3. ~~Route pro users to Modal~~ ✅ — ALL PAID TIERS routed to Wan 2.2 (Starter/Pro/Agency)
 4. ~~Keep FFmpeg slideshow for free tier~~ ✅ — unchanged
-5. **To activate**: rewrite modal_video.py → `modal deploy backend/modal_video.py` → add `MODAL_APP_NAME=launchbusiness-wan-video` to secrets
+5. **To deploy**: `modal deploy backend/modal_video.py` → add `MODAL_APP_NAME=launchbusiness-wan-video` to secrets
 6. Full spec: `docs/WAN_VIDEO_UPGRADE.md`
 
 ### Phase 4 — Talking Head ✅ COMPLETE (pending Modal deploy)
@@ -289,16 +289,7 @@ Permanent account ban on violation.
 3. No GPU required — same FFmpeg video, better copy
 4. Build time: ~3 hours
 
-### Phase 6 — Wan 2.2 GPU Video Upgrade (replaces LTX-Video / SVD plan)
-1. Rewrite `backend/modal_video.py` — swap LTX-Video for Wan 2.2 TI2V-5B on A10G
-2. Fix APP_NAME: `launchbusiness-wan-video` (eliminates existing silent failure bug)
-3. Add image input: pass Hero Pillow slide PNG to Wan 2.2 (animates real brand)
-4. Enable for ALL paid tiers (not just Pro) — margin is ~98% even on Starter at $0.03/clip
-5. Update `server.py` line 129: `MODAL_APP_NAME` default → `launchbusiness-wan-video`
-6. Deploy + activate: `modal deploy backend/modal_video.py`
-7. Full spec: `docs/WAN_VIDEO_UPGRADE.md` | Build time: ~5 hours
-
-### Phase 7 — Tutorial Studio (Chrome Extension)
+### Phase 6 — Tutorial Studio (Chrome Extension)
 1. Build Chrome extension: `extension/` folder (4 files — manifest, background, popup.html, popup.js)
 2. Extension uses Chrome's tabCapture API to record any tab the founder is on
 3. Server endpoint: `POST /api/tutorial/process` — extracts frames → Gemini Vision narrates → Edge TTS → FFmpeg assembles 16:9 tutorial
@@ -382,7 +373,3 @@ Client pays them $500–$2,000/mo. They pay us $149. Pure arbitrage.
 | 8 | Legal intake pre-fill from profile | 4h |
 | 9 | Full Launch Pack endpoint | 9h |
 **Total: ~40 hours / ~1 week**
-
----
-
-## Competitors
